@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @RestController
 @RequestMapping("/api/v1/comissao")
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ public class ComissaoController {
     private final ComissaoService comissaoService;
 
     @GetMapping("/{ano}/{mes}")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<ComissaoResponse> obterComissaoMensal(@PathVariable int ano, @PathVariable int mes) {
         ComissaoCalculada comissao = comissaoService.calcularEObterComissaoMensal(ano, mes);
 

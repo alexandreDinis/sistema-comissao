@@ -1,7 +1,6 @@
 package com.empresa.comissao.service;
 
 import com.empresa.comissao.domain.entity.ComissaoCalculada;
-import com.empresa.comissao.domain.entity.Faturamento;
 import com.empresa.comissao.repository.ComissaoCalculadaRepository;
 import com.empresa.comissao.repository.FaturamentoRepository;
 import com.empresa.comissao.repository.PagamentoAdiantadoRepository;
@@ -12,7 +11,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Optional;
 
@@ -47,7 +45,7 @@ class ComissaoServiceTest {
         ComissaoCalculada resultado = comissaoService.calcularEObterComissaoMensal(2026, 1);
 
         assertThat(resultado).isNotNull();
-        assertThat(resultado.getValorBrutoComissao()).isEqualTo(new BigDecimal("2400.00")); // 12% de 20000
-        assertThat(resultado.getSaldoAReceber()).isEqualTo(new BigDecimal("1400.00")); // 2400 - 1000
+        assertThat(resultado.getValorBrutoComissao()).isEqualTo(new BigDecimal("3000.00")); // 15% de 20000
+        assertThat(resultado.getSaldoAReceber()).isEqualTo(new BigDecimal("2000.00")); // 3000 - 1000
     }
 }

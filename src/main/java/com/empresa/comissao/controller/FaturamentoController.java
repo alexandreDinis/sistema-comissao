@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @RestController
 @RequestMapping("/api/v1/faturamento")
 @RequiredArgsConstructor
@@ -20,6 +22,7 @@ public class FaturamentoController {
     private final ComissaoService comissaoService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Faturamento> registrarFaturamento(@RequestBody FaturamentoRequest request) {
         Faturamento faturamento = comissaoService.adicionarFaturamento(request.getDataFaturamento(),
                 request.getValor());

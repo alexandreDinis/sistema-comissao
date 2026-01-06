@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @RestController
 @RequestMapping("/api/v1/adiantamento")
 @RequiredArgsConstructor
@@ -20,6 +22,7 @@ public class AdiantamentoController {
     private final ComissaoService comissaoService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PagamentoAdiantado> registrarAdiantamento(@RequestBody AdiantamentoRequest request) {
         PagamentoAdiantado adiantamento = comissaoService.adicionarAdiantamento(request.getDataPagamento(),
                 request.getValor());
