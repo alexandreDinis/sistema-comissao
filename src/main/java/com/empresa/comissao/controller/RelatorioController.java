@@ -20,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class RelatorioController {
 
     private final ComissaoService comissaoService;
+    private final com.empresa.comissao.service.PdfService pdfService;
 
     @GetMapping("/{ano}/{mes}")
     @PreAuthorize("hasRole('ADMIN')")
@@ -27,5 +28,18 @@ public class RelatorioController {
     public ResponseEntity<RelatorioFinanceiroDTO> gerarRelatorio(@PathVariable int ano, @PathVariable int mes) {
         RelatorioFinanceiroDTO relatorio = comissaoService.gerarRelatorioFinanceiro(ano, mes);
         return ResponseEntity.ok(relatorio);
+    }
+
+    @GetMapping(value = "/{ano}/{mes}/pdf", produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Exportar relatório em PDF")
+    public ResponseEntity<byte[]> gerarRelatorioPdf(@PathVariable int ano, @PathVariable int mes) {
+        RelatorioFinanceiroDTO relatorio = comissaoService.gerarRelatorioFinanceiro(ano, mes);
+        byte[] pdfBytes = pdfService.gerarRelatorioFinanceiroPdf(relatorio);
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=relatorio-" + ano + "-" + mes + ".pdf")
+                .body(pdfBytes);
     }
 }

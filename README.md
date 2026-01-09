@@ -59,6 +59,21 @@ mvn spring-boot:run -Dspring-boot.run.profiles=prod
 - `POST /api/v1/faturamento` - Registrar novo faturamento
 - `GET /api/v1/faturamento` - Listar todos os faturamentos
 
+### Despesas
+
+- `POST /api/v1/despesas` - Registrar nova despesa (ADMIN)
+
+### Relatórios
+
+- `GET /api/v1/relatorios/{ano}/{mes}` - Relatório consolidado (ADMIN)
+- `GET /api/v1/relatorios/{ano}/{mes}/pdf` - Exportar relatório em PDF (ADMIN)
+
+### Ordem de Serviço (Em desenvolvimento)
+
+- `POST /api/v1/clientes` - Gerenciar Clientes
+- `POST /api/v1/tipos-peca` - Gerenciar Catálogo de Peças
+- `POST /api/v1/ordens-servico` - Criar e gerenciar OS
+
 ### Adiantamento
 
 - `POST /api/v1/adiantamento` - Registrar novo adiantamento

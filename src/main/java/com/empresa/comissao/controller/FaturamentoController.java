@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -27,6 +28,11 @@ public class FaturamentoController {
         Faturamento faturamento = comissaoService.adicionarFaturamento(request.getDataFaturamento(),
                 request.getValor());
         return new ResponseEntity<>(faturamento, HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Faturamento>> listar() {
+        return ResponseEntity.ok(comissaoService.listarFaturamentos());
     }
 
     @Getter

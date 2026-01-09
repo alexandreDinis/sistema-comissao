@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -27,6 +28,11 @@ public class AdiantamentoController {
         PagamentoAdiantado adiantamento = comissaoService.adicionarAdiantamento(request.getDataPagamento(),
                 request.getValor());
         return new ResponseEntity<>(adiantamento, HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<PagamentoAdiantado>> listar() {
+        return ResponseEntity.ok(comissaoService.listarAdiantamentos());
     }
 
     @Getter

@@ -1,7 +1,7 @@
 package com.empresa.comissao.repository;
 
 import com.empresa.comissao.domain.entity.User;
-import org.springframework.security.core.userdetails.UserDetails;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

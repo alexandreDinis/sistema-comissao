@@ -22,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -247,5 +248,17 @@ public class ComissaoService {
                                         log.info("🗑️ Deletando comissão antiga para recalcular: {}", anoMes);
                                         comissaoCalculadaRepository.delete(comissao);
                                 });
+        }
+
+        public List<Faturamento> listarFaturamentos() {
+                return faturamentoRepository.findAll();
+        }
+
+        public List<PagamentoAdiantado> listarAdiantamentos() {
+                return pagamentoAdiantadoRepository.findAll();
+        }
+
+        public List<Despesa> listarDespesas() {
+                return despesaRepository.findAll();
         }
 }

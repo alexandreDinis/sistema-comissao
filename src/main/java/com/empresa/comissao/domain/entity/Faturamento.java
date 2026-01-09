@@ -27,6 +27,10 @@ public class Faturamento {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal valor;
 
+    @OneToOne
+    @JoinColumn(name = "ordem_servico_id")
+    private OrdemServico ordemServico;
+
     @Column(name = "data_criacao", nullable = false, updatable = false)
     private LocalDateTime dataCriacao;
 
