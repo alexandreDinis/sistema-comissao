@@ -11,7 +11,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
 
 @Data
 @Builder
@@ -39,7 +38,7 @@ public class User implements UserDetails {
     @JoinColumn(name = "empresa_id")
     private Empresa empresa; // Nullable for SUPER_ADMIN (Platform Level)
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.EAGER, cascade = { CascadeType.MERGE, CascadeType.PERSIST })
     @JoinTable(name = "user_features", joinColumns = @JoinColumn(name = "usuario_id"), inverseJoinColumns = @JoinColumn(name = "feature_id"))
     private java.util.Set<Feature> features;
 

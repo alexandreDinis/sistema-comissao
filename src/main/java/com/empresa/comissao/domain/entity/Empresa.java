@@ -1,5 +1,6 @@
 package com.empresa.comissao.domain.entity;
 
+import com.empresa.comissao.domain.enums.ModoComissao;
 import com.empresa.comissao.domain.enums.Plano;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -29,6 +30,11 @@ public class Empresa {
     @Column(nullable = false)
     @Builder.Default
     private Plano plano = Plano.BRONZE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "modo_comissao", nullable = false)
+    @Builder.Default
+    private ModoComissao modoComissao = ModoComissao.INDIVIDUAL;
 
     @Builder.Default
     private boolean ativo = true;

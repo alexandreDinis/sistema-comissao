@@ -22,8 +22,10 @@ public class ClienteController {
 
     @PostMapping
     @Operation(summary = "Criar cliente")
-    public ResponseEntity<ClienteResponse> criar(@Valid @RequestBody ClienteRequest request) {
-        return ResponseEntity.ok(clienteService.criar(request));
+    public ResponseEntity<ClienteResponse> criar(
+            @Valid @RequestBody ClienteRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+        return ResponseEntity.ok(clienteService.criar(request, usuario));
     }
 
     @GetMapping

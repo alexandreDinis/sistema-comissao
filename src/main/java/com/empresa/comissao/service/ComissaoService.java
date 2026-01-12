@@ -54,7 +54,7 @@ public class ComissaoService {
                 // 1. Verificar se a comissão já foi calculada e persistida para este
                 // mês/usuário
                 Optional<ComissaoCalculada> comissaoExistente = comissaoCalculadaRepository
-                                .findByAnoMesReferenciaAndUsuario(anoMesReferencia, usuario);
+                                .findFirstByAnoMesReferenciaAndUsuario(anoMesReferencia, usuario);
 
                 if (comissaoExistente.isPresent()) {
                         log.info("✅ Comissão encontrada em cache: {}", anoMesReferencia);
@@ -137,63 +137,162 @@ public class ComissaoService {
                 return calcularEObterComissaoMensal(ano, mes, null);
         }
 
+        /**
+         * Calculate company-wide commission for ADMIN_EMPRESA role.
+         * This aggregates all faturamento/adiantamento for the entire empresa.
+         */
+        @Transactional
+        public ComissaoCalculada calcularComissaoEmpresaMensal(int ano, int mes,
+                        com.empresa.comissao.domain.entity.Empresa empresa) {
+                YearMonth anoMesReferencia = YearMonth.of(ano, mes);
+
+                log.info("🏢 Buscando comissão EMPRESA para: {}/{} - Empresa: {}", ano, mes,
+                                empresa != null ? empresa.getNome() : "GLOBAL");
+
+                if (empresa == null) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Empresa é obrigatória para cálculo de comissão consolidada.");
+                }
+
+                // 1. Check cache by empresa (not user)
+                Optional<ComissaoCalculada> comissaoExistente = comissaoCalculadaRepository
+                                .findFirstByAnoMesReferenciaAndEmpresaAndUsuarioIsNull(anoMesReferencia, empresa);
+
+                if (comissaoExistente.isPresent()) {
+                        log.info("✅ Comissão empresa encontrada em cache: {}", anoMesReferencia);
+                        return comissaoExistente.get();
+                }
+
+                log.info("📊 Comissão empresa não encontrada. Calculando...");
+
+                // 2. Sum all faturamento for the empresa
+                LocalDate inicioDoMes = anoMesReferencia.atDay(1);
+                LocalDate fimDoMes = anoMesReferencia.atEndOfMonth();
+
+                BigDecimal faturamentoMensalTotal = faturamentoRepository
+                                .sumValorByDataFaturamentoBetweenAndEmpresa(inicioDoMes, fimDoMes, empresa)
+                                .orElse(BigDecimal.ZERO);
+
+                log.info("💰 Faturamento total da empresa: {}", faturamentoMensalTotal);
+
+                // 3. Sum all adiantamentos for the empresa
+                BigDecimal valorTotalAdiantamentos = pagamentoAdiantadoRepository
+                                .sumValorByDataPagamentoBetweenAndEmpresa(inicioDoMes, fimDoMes, empresa)
+                                .orElse(BigDecimal.ZERO);
+
+                log.info("💸 Adiantamentos total da empresa: {}", valorTotalAdiantamentos);
+
+                // 4. Calculate commission
+                com.empresa.comissao.domain.model.FaixaComissao faixa = com.empresa.comissao.domain.model.TabelaComissao
+                                .getFaixaByFaturamento(faturamentoMensalTotal);
+
+                log.info("📈 Faixa encontrada: {} - {}%", faixa.getDescricao(), faixa.getPorcentagem());
+
+                BigDecimal valorBrutoComissao = faturamentoMensalTotal.multiply(faixa.getPorcentagem())
+                                .setScale(2, java.math.RoundingMode.HALF_UP);
+
+                BigDecimal saldoAReceber = valorBrutoComissao.subtract(valorTotalAdiantamentos)
+                                .setScale(2, java.math.RoundingMode.HALF_UP);
+
+                log.info("✅ Saldo a receber da empresa: {}", saldoAReceber);
+
+                // 5. Save company-wide commission (no usuario, only empresa)
+                ComissaoCalculada novaComissao = ComissaoCalculada.builder()
+                                .anoMesReferencia(anoMesReferencia)
+                                .faturamentoMensalTotal(faturamentoMensalTotal)
+                                .faixaComissaoDescricao(faixa.getDescricao())
+                                .porcentagemComissaoAplicada(faixa.getPorcentagem().multiply(new BigDecimal("100")))
+                                .valorBrutoComissao(valorBrutoComissao)
+                                .valorTotalAdiantamentos(valorTotalAdiantamentos)
+                                .saldoAReceber(saldoAReceber)
+                                .usuario(null) // No specific user for company-wide report
+                                .empresa(empresa)
+                                .build();
+
+                ComissaoCalculada salva = comissaoCalculadaRepository.save(novaComissao);
+                log.info("💾 Comissão empresa salva com ID: {}", salva.getId());
+
+                return salva;
+        }
+
         @Transactional
         public void invalidarCache(com.empresa.comissao.domain.entity.User usuario, YearMonth anoMes) {
                 log.info("🗑️ Invalidando cache de comissão para Usuário: {} - Mês: {}",
                                 usuario != null ? usuario.getEmail() : "GLOBAL", anoMes);
-                comissaoCalculadaRepository.findByAnoMesReferenciaAndUsuario(anoMes, usuario)
+
+                // Invalidate user-specific cache
+                comissaoCalculadaRepository.findFirstByAnoMesReferenciaAndUsuario(anoMes, usuario)
                                 .ifPresent(comissao -> {
                                         comissaoCalculadaRepository.delete(comissao);
-                                        log.info("✅ Cache invalidado com sucesso.");
+                                        log.info("✅ Cache de usuário invalidado com sucesso.");
                                 });
+
+                // Also invalidate empresa cache if user has empresa
+                if (usuario != null && usuario.getEmpresa() != null) {
+                        comissaoCalculadaRepository.findByAnoMesReferenciaAndEmpresa(anoMes, usuario.getEmpresa())
+                                        .forEach(comissao -> {
+                                                comissaoCalculadaRepository.delete(comissao);
+                                                log.info("✅ Cache de empresa invalidado com sucesso.");
+                                        });
+                }
         }
 
         @Transactional
-        public Faturamento adicionarFaturamento(LocalDate data, BigDecimal valor) {
-                log.info("📝 Registrando faturamento: {} - R$ {}", data, valor);
+        public Faturamento adicionarFaturamento(LocalDate data, BigDecimal valor,
+                        com.empresa.comissao.domain.entity.User usuario) {
+                log.info("📝 Registrando faturamento: {} - R$ {} - Usuário: {}", data, valor,
+                                usuario != null ? usuario.getEmail() : "GLOBAL");
 
                 Faturamento faturamento = Faturamento.builder()
                                 .dataFaturamento(data)
                                 .valor(valor)
+                                .usuario(usuario)
+                                .empresa(usuario != null ? usuario.getEmpresa() : null)
                                 .build();
 
                 Faturamento salvo = faturamentoRepository.save(faturamento);
                 log.info("✅ Faturamento registrado com ID: {}", salvo.getId());
 
-                // Invalidate Global Cache (since we don't know user here in this legacy method)
-                invalidarCache(null, YearMonth.from(data));
+                // Invalidate Cache for this user's month
+                invalidarCache(usuario, YearMonth.from(data));
 
                 return salvo;
         }
 
         @Transactional
-        public PagamentoAdiantado adicionarAdiantamento(LocalDate data, BigDecimal valor) {
-                log.info("📝 Registrando adiantamento: {} - R$ {}", data, valor);
+        public PagamentoAdiantado adicionarAdiantamento(LocalDate data, BigDecimal valor,
+                        com.empresa.comissao.domain.entity.User usuario) {
+                log.info("📝 Registrando adiantamento: {} - R$ {} - Usuário: {}", data, valor,
+                                usuario != null ? usuario.getEmail() : "GLOBAL");
 
                 PagamentoAdiantado adiantamento = PagamentoAdiantado.builder()
                                 .dataPagamento(data)
                                 .valor(valor)
+                                .usuario(usuario)
+                                .empresa(usuario != null ? usuario.getEmpresa() : null)
                                 .build();
 
                 PagamentoAdiantado salvo = pagamentoAdiantadoRepository.save(adiantamento);
                 log.info("✅ Adiantamento registrado com ID: {}", salvo.getId());
 
-                // Invalidate Global Cache
-                invalidarCache(null, YearMonth.from(data));
+                // Invalidate Cache for this user's month
+                invalidarCache(usuario, YearMonth.from(data));
 
                 return salvo;
         }
 
         @Transactional
         public Despesa adicionarDespesa(LocalDate data, BigDecimal valor, CategoriaDespesa categoria,
-                        String descricao) {
-                log.info("📝 Registrando despesa: {} - R$ {} - {}", data, valor, categoria);
+                        String descricao, com.empresa.comissao.domain.entity.User usuario) {
+                log.info("📝 Registrando despesa: {} - R$ {} - {} - Usuário: {}", data, valor, categoria,
+                                usuario != null ? usuario.getEmail() : "GLOBAL");
 
                 Despesa despesa = Despesa.builder()
                                 .dataDespesa(data)
                                 .valor(valor)
                                 .categoria(categoria)
                                 .descricao(descricao)
+                                .empresa(usuario != null ? usuario.getEmpresa() : null)
                                 .build();
 
                 Despesa salva = despesaRepository.save(despesa);
@@ -203,7 +302,8 @@ public class ComissaoService {
         }
 
         public RelatorioFinanceiroDTO gerarRelatorioFinanceiro(int ano, int mes,
-                        com.empresa.comissao.domain.entity.User usuario) {
+                        com.empresa.comissao.domain.entity.User usuario,
+                        com.empresa.comissao.domain.entity.Empresa empresaFresh) {
                 YearMonth anoMes = YearMonth.of(ano, mes);
                 LocalDate inicioDoMes = anoMes.atDay(1);
                 LocalDate fimDoMes = anoMes.atEndOfMonth();
@@ -211,8 +311,15 @@ public class ComissaoService {
                 log.info("📊 Gerando relatório consolidado para {}/{} - Usuário: {}", ano, mes,
                                 usuario != null ? usuario.getEmail() : "GLOBAL");
 
-                // 1. Obter Comissão do Mês (contém faturamento mensal total)
-                ComissaoCalculada comissao = calcularEObterComissaoMensal(ano, mes, usuario);
+                // 1. Obter Comissão do Mês (respeitando modoComissao)
+                ComissaoCalculada comissao;
+                if (empresaFresh != null && empresaFresh
+                                .getModoComissao() == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
+                        log.info("📊 Relatório usando modo COLETIVA para empresa: {}", empresaFresh.getNome());
+                        comissao = calcularComissaoEmpresaMensal(ano, mes, empresaFresh);
+                } else {
+                        comissao = calcularEObterComissaoMensal(ano, mes, usuario);
+                }
                 BigDecimal faturamentoTotal = comissao.getFaturamentoMensalTotal();
 
                 // 2. Calcular Imposto (6% sobre faturamento total)

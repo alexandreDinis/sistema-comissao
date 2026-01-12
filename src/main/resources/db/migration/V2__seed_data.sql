@@ -7,6 +7,7 @@ INSERT INTO features (codigo, descricao, plano_minimo) VALUES
 ('DASHBOARD_VIEW', 'Visualizar Dashboard', 'BRONZE'),
 ('RELATORIO_COMISSAO_VIEW', 'Visualizar Relatório de Comissão', 'BRONZE'),
 ('RELATORIO_FINANCEIRO_VIEW', 'Visualizar Relatório Financeiro', 'PRATA'),
+('COMISSAO_EMPRESA_VIEW', 'Visualizar comissão consolidada da empresa', 'BRONZE'),
 ('OS_READ', 'Listar Ordens de Serviço', 'BRONZE'),
 ('OS_CREATE', 'Criar Ordem de Serviço', 'BRONZE'),
 ('OS_UPDATE', 'Editar Ordem de Serviço', 'BRONZE'),

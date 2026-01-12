@@ -16,10 +16,11 @@ public class TipoPecaService {
     private final TipoPecaRepository tipoPecaRepository;
 
     @Transactional
-    public TipoPeca criar(TipoPecaRequest request) {
+    public TipoPeca criar(TipoPecaRequest request, com.empresa.comissao.domain.entity.User usuario) {
         TipoPeca tipoPeca = TipoPeca.builder()
                 .nome(request.getNome())
                 .valorPadrao(request.getValorPadrao())
+                .empresa(usuario.getEmpresa())
                 .build();
         return tipoPecaRepository.save(tipoPeca);
     }

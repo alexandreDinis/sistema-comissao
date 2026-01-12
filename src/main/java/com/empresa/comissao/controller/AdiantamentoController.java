@@ -24,9 +24,11 @@ public class AdiantamentoController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<PagamentoAdiantado> registrarAdiantamento(@RequestBody AdiantamentoRequest request) {
+    public ResponseEntity<PagamentoAdiantado> registrarAdiantamento(
+            @RequestBody AdiantamentoRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
         PagamentoAdiantado adiantamento = comissaoService.adicionarAdiantamento(request.getDataPagamento(),
-                request.getValor());
+                request.getValor(), usuario);
         return new ResponseEntity<>(adiantamento, HttpStatus.CREATED);
     }
 

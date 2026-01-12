@@ -1,6 +1,7 @@
 package com.empresa.comissao.domain.entity;
 
 import com.empresa.comissao.domain.enums.StatusOrdemServico;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -33,14 +34,17 @@ public class OrdemServico {
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "cliente_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Cliente cliente;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "password", "features" })
     private User usuario;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "empresa_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa;
 
     // Persisted total for performance

@@ -22,8 +22,10 @@ public class TipoPecaController {
 
     @PostMapping
     @Operation(summary = "Adicionar item ao catálogo")
-    public ResponseEntity<TipoPeca> criar(@Valid @RequestBody TipoPecaRequest request) {
-        return ResponseEntity.ok(tipoPecaService.criar(request));
+    public ResponseEntity<TipoPeca> criar(
+            @Valid @RequestBody TipoPecaRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+        return ResponseEntity.ok(tipoPecaService.criar(request, usuario));
     }
 
     @GetMapping

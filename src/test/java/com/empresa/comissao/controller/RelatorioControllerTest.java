@@ -39,7 +39,7 @@ public class RelatorioControllerTest {
                 .faturamentoTotal(BigDecimal.TEN)
                 .build();
 
-        when(comissaoService.gerarRelatorioFinanceiro(eq(2024), eq(1), any())).thenReturn(dto);
+        when(comissaoService.gerarRelatorioFinanceiro(eq(2024), eq(1), any(), any())).thenReturn(dto);
 
         mockMvc.perform(get("/api/v1/relatorios/2024/1"))
                 .andExpect(status().isOk())
@@ -52,7 +52,7 @@ public class RelatorioControllerTest {
         RelatorioFinanceiroDTO dto = RelatorioFinanceiroDTO.builder().build();
         byte[] fakePdf = new byte[] { 1, 2, 3 };
 
-        when(comissaoService.gerarRelatorioFinanceiro(eq(2024), eq(1), any())).thenReturn(dto);
+        when(comissaoService.gerarRelatorioFinanceiro(eq(2024), eq(1), any(), any())).thenReturn(dto);
         when(pdfService.gerarRelatorioFinanceiroPdf(dto)).thenReturn(fakePdf);
 
         mockMvc.perform(get("/api/v1/relatorios/2024/1/pdf"))

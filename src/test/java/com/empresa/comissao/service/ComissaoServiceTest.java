@@ -36,7 +36,7 @@ class ComissaoServiceTest {
         YearMonth anoMes = YearMonth.of(2026, 1);
         BigDecimal faturamentoTotal = new BigDecimal("20000.00");
 
-        when(comissaoRepository.findByAnoMesReferencia(anoMes)).thenReturn(Optional.empty());
+        when(comissaoRepository.findFirstByAnoMesReferencia(anoMes)).thenReturn(Optional.empty());
         when(faturamentoRepository.sumValorByDataFaturamentoBetween(any(), any()))
                 .thenReturn(Optional.of(faturamentoTotal));
         when(adiantamentoRepository.sumValorByDataPagamentoBetween(any(), any()))

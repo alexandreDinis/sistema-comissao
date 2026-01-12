@@ -9,6 +9,7 @@ CREATE TABLE empresas (
     nome VARCHAR(255) NOT NULL,
     cnpj VARCHAR(20),
     plano VARCHAR(20) NOT NULL DEFAULT 'BRONZE', -- BRONZE, PRATA, OURO
+    modo_comissao VARCHAR(20) NOT NULL DEFAULT 'INDIVIDUAL', -- INDIVIDUAL, COLETIVA
     ativo BOOLEAN DEFAULT TRUE,
     data_criacao TIMESTAMP NOT NULL DEFAULT NOW(),
     data_atualizacao TIMESTAMP
@@ -149,10 +150,11 @@ CREATE TABLE despesas (
 );
 
 -- 11. Cache de Comissões
+-- usuario_id is NULL for empresa-wide calculations (modo COLETIVA)
 CREATE TABLE comissoes_calculadas (
     id BIGSERIAL PRIMARY KEY,
     empresa_id BIGINT NOT NULL,
-    usuario_id BIGINT NOT NULL,
+    usuario_id BIGINT, -- NULL for empresa-wide, filled for individual
     ano_mes_referencia VARCHAR(7) NOT NULL, -- "2023-10"
     faturamento_mensal_total NUMERIC(19, 2) NOT NULL,
     faixa_comissao_descricao VARCHAR(255) NOT NULL,
@@ -167,3 +169,5 @@ CREATE TABLE comissoes_calculadas (
 );
 
 CREATE INDEX idx_comissao_usuario_mes ON comissoes_calculadas(usuario_id, ano_mes_referencia);
+CREATE INDEX idx_comissao_empresa_mes ON comissoes_calculadas(empresa_id, ano_mes_referencia);
+

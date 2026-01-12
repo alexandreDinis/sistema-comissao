@@ -29,12 +29,15 @@ public class DespesaController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Registrar uma nova despesa", description = "Adiciona um gasto categorizado ao sistema.")
-    public ResponseEntity<Despesa> criar(@Valid @RequestBody DespesaRequestDTO request) {
+    public ResponseEntity<Despesa> criar(
+            @Valid @RequestBody DespesaRequestDTO request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
         Despesa salva = comissaoService.adicionarDespesa(
                 request.getDataDespesa(),
                 request.getValor(),
                 request.getCategoria(),
-                request.getDescricao());
+                request.getDescricao(),
+                usuario);
         return ResponseEntity.ok(salva);
     }
 

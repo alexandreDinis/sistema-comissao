@@ -1,5 +1,6 @@
 package com.empresa.comissao.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,14 +30,17 @@ public class Faturamento {
 
     @OneToOne
     @JoinColumn(name = "ordem_servico_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private OrdemServico ordemServico;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "password", "features" })
     private User usuario;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "empresa_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa;
 
     @Column(name = "data_criacao", nullable = false, updatable = false)

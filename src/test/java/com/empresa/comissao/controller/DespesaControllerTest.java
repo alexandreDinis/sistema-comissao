@@ -48,7 +48,7 @@ public class DespesaControllerTest {
                 .valor(new BigDecimal("50.00"))
                 .build();
 
-        when(comissaoService.adicionarDespesa(any(), any(), any(), any())).thenReturn(despesa);
+        when(comissaoService.adicionarDespesa(any(), any(), any(), any(), any())).thenReturn(despesa);
 
         mockMvc.perform(post("/api/v1/despesas")
                 .with(csrf()) // important for security test

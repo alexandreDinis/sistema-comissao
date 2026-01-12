@@ -20,9 +20,36 @@ public class UserController {
     private final com.empresa.comissao.repository.EmpresaRepository empresaRepository;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<User>> getAllUsers() {
-        return ResponseEntity.ok(repository.findAll());
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA', 'SUPER_ADMIN')")
+    public ResponseEntity<List<UserResponse>> getAllUsers(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+
+        java.util.List<User> users;
+
+        // SUPER_ADMIN can see all users, ADMIN_EMPRESA only sees their company's users
+        if (principal.getRole() == Role.SUPER_ADMIN) {
+            users = repository.findAll();
+        } else {
+            // Tenant isolation: only return users from same empresa
+            if (principal.getEmpresa() == null) {
+                return ResponseEntity.ok(java.util.Collections.emptyList());
+            }
+            users = repository.findByEmpresa(principal.getEmpresa());
+        }
+
+        // Map to UserResponse (without sensitive data like password)
+        java.util.List<UserResponse> response = users.stream()
+                .map(u -> new UserResponse(
+                        u.getId(),
+                        u.getEmail(),
+                        u.getRole(),
+                        u.isActive(),
+                        u.getFeatures() != null ? u.getFeatures().stream()
+                                .map(com.empresa.comissao.domain.entity.Feature::getCodigo)
+                                .collect(java.util.stream.Collectors.toSet()) : java.util.Collections.emptySet()))
+                .collect(java.util.stream.Collectors.toList());
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/me")
@@ -62,6 +89,7 @@ public class UserController {
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN_EMPRESA', 'SUPER_ADMIN')")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable Long id,
             @RequestBody UpdateUserRequest request,

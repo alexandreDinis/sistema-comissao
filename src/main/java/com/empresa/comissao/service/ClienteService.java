@@ -18,11 +18,12 @@ public class ClienteService {
     private final ClienteRepository clienteRepository;
 
     @Transactional
-    public ClienteResponse criar(ClienteRequest request) {
+    public ClienteResponse criar(ClienteRequest request, com.empresa.comissao.domain.entity.User usuario) {
         com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
 
         Cliente cliente = new Cliente();
-        updateEntity(cliente, request); // Changed from updateClienteData to updateEntity for syntactic correctness
+        updateEntity(cliente, request);
+        cliente.setEmpresa(usuario.getEmpresa());
         cliente = clienteRepository.save(cliente);
         return mapToResponse(cliente);
     }
