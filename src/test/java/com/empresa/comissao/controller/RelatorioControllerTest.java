@@ -12,6 +12,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -37,7 +39,7 @@ public class RelatorioControllerTest {
                 .faturamentoTotal(BigDecimal.TEN)
                 .build();
 
-        when(comissaoService.gerarRelatorioFinanceiro(2024, 1)).thenReturn(dto);
+        when(comissaoService.gerarRelatorioFinanceiro(eq(2024), eq(1), any())).thenReturn(dto);
 
         mockMvc.perform(get("/api/v1/relatorios/2024/1"))
                 .andExpect(status().isOk())
@@ -50,7 +52,7 @@ public class RelatorioControllerTest {
         RelatorioFinanceiroDTO dto = RelatorioFinanceiroDTO.builder().build();
         byte[] fakePdf = new byte[] { 1, 2, 3 };
 
-        when(comissaoService.gerarRelatorioFinanceiro(2024, 1)).thenReturn(dto);
+        when(comissaoService.gerarRelatorioFinanceiro(eq(2024), eq(1), any())).thenReturn(dto);
         when(pdfService.gerarRelatorioFinanceiroPdf(dto)).thenReturn(fakePdf);
 
         mockMvc.perform(get("/api/v1/relatorios/2024/1/pdf"))

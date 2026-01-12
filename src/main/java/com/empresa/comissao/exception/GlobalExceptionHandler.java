@@ -98,6 +98,35 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Object> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex,
+            jakarta.servlet.http.HttpServletRequest request) {
+        log.error("❌ Violação de integridade de dados em {} {}: {}",
+                request.getMethod(), request.getRequestURI(), ex.getMostSpecificCause().getMessage());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.CONFLICT.value());
+        body.put("error", "Erro de Dados");
+
+        String message = "Erro ao processar os dados. ";
+        String rootCause = ex.getMostSpecificCause().getMessage();
+
+        if (rootCause.contains("empresa_id")) {
+            message += "Usuário não está vinculado a uma empresa. Faça login novamente ou contate o administrador.";
+        } else if (rootCause.contains("usuario_id")) {
+            message += "Usuário não identificado. Faça login novamente.";
+        } else if (rootCause.contains("unique") || rootCause.contains("duplicate")) {
+            message += "Registro duplicado. Verifique os dados informados.";
+        } else {
+            message += "Verifique os dados informados e tente novamente.";
+        }
+
+        body.put("message", message);
+        return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Object> handleTypeMismatchException(MethodArgumentTypeMismatchException ex) {
         Map<String, Object> body = new LinkedHashMap<>();

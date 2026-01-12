@@ -202,15 +202,17 @@ public class ComissaoService {
                 return salva;
         }
 
-        public RelatorioFinanceiroDTO gerarRelatorioFinanceiro(int ano, int mes) {
+        public RelatorioFinanceiroDTO gerarRelatorioFinanceiro(int ano, int mes,
+                        com.empresa.comissao.domain.entity.User usuario) {
                 YearMonth anoMes = YearMonth.of(ano, mes);
                 LocalDate inicioDoMes = anoMes.atDay(1);
                 LocalDate fimDoMes = anoMes.atEndOfMonth();
 
-                log.info("📊 Gerando relatório consolidado para {}/{}", ano, mes);
+                log.info("📊 Gerando relatório consolidado para {}/{} - Usuário: {}", ano, mes,
+                                usuario != null ? usuario.getEmail() : "GLOBAL");
 
                 // 1. Obter Comissão do Mês (contém faturamento mensal total)
-                ComissaoCalculada comissao = calcularEObterComissaoMensal(ano, mes);
+                ComissaoCalculada comissao = calcularEObterComissaoMensal(ano, mes, usuario);
                 BigDecimal faturamentoTotal = comissao.getFaturamentoMensalTotal();
 
                 // 2. Calcular Imposto (6% sobre faturamento total)

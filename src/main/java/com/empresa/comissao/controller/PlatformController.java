@@ -1,10 +1,12 @@
 package com.empresa.comissao.controller;
 
 import com.empresa.comissao.domain.entity.Empresa;
+import com.empresa.comissao.domain.entity.Feature;
 import com.empresa.comissao.domain.entity.User;
 import com.empresa.comissao.domain.enums.Plano;
 import com.empresa.comissao.domain.enums.Role;
 import com.empresa.comissao.repository.EmpresaRepository;
+import com.empresa.comissao.repository.FeatureRepository;
 import com.empresa.comissao.repository.UserRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashSet;
 import java.util.List;
 
 @RestController
@@ -23,6 +26,7 @@ public class PlatformController {
 
     private final EmpresaRepository empresaRepository;
     private final UserRepository userRepository;
+    private final FeatureRepository featureRepository;
     private final PasswordEncoder passwordEncoder;
 
     @GetMapping("/tenants")
@@ -44,13 +48,21 @@ public class PlatformController {
                 .build();
         empresa = empresaRepository.save(empresa);
 
-        // 2. Create Initial Admin
+        // 2. Get features available for the company's plan
+        // Build list of plans that are equal or lower than the company's plan
+        List<Plano> eligiblePlans = java.util.Arrays.stream(Plano.values())
+                .filter(p -> p.ordinal() <= request.getPlano().ordinal())
+                .toList();
+        List<Feature> availableFeatures = featureRepository.findByPlanoMinimoIn(eligiblePlans);
+
+        // 3. Create Initial Admin with features assigned
         var admin = User.builder()
                 .email(request.getAdminEmail())
-                .password(passwordEncoder.encode(request.getAdminPassword())) // ✅ CORRECT ENCODING
+                .password(passwordEncoder.encode(request.getAdminPassword()))
                 .role(Role.ADMIN_EMPRESA)
                 .empresa(empresa)
                 .active(true)
+                .features(new HashSet<>(availableFeatures))
                 .build();
         userRepository.save(admin);
 
