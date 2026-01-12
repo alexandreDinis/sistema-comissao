@@ -27,6 +27,14 @@ public class PagamentoAdiantado {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal valor;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private User usuario;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
+
     @Column(length = 500)
     private String descricao;
 

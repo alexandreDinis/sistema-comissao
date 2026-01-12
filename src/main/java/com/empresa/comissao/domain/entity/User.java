@@ -35,9 +35,39 @@ public class User implements UserDetails {
 
     private boolean active;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa; // Nullable for SUPER_ADMIN (Platform Level)
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "user_features", joinColumns = @JoinColumn(name = "usuario_id"), inverseJoinColumns = @JoinColumn(name = "feature_id"))
+    private java.util.Set<Feature> features;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        java.util.List<GrantedAuthority> authorities = new java.util.ArrayList<>();
+
+        // 1. Convert Roles
+        if (role == Role.ADMIN_EMPRESA) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN_EMPRESA"));
+        } else if (role == Role.SUPER_ADMIN) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_ROOT"));
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            authorities.add(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        } else if (role == Role.FUNCIONARIO) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+            authorities.add(new SimpleGrantedAuthority("ROLE_FUNCIONARIO"));
+        } else {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        }
+
+        // 2. Convert Features
+        if (features != null) {
+            features.forEach(f -> authorities.add(new SimpleGrantedAuthority(f.getCodigo())));
+        }
+
+        return authorities;
     }
 
     @Override

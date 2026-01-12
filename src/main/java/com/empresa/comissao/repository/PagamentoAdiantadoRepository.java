@@ -10,10 +10,17 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 
+import com.empresa.comissao.domain.entity.User;
+
 @Repository
 public interface PagamentoAdiantadoRepository extends JpaRepository<PagamentoAdiantado, Long> {
 
     @Query("SELECT SUM(p.valor) FROM PagamentoAdiantado p WHERE p.dataPagamento BETWEEN :startDate AND :endDate")
     Optional<BigDecimal> sumValorByDataPagamentoBetween(@Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT SUM(p.valor) FROM PagamentoAdiantado p WHERE p.usuario = :usuario AND p.dataPagamento BETWEEN :startDate AND :endDate")
+    Optional<BigDecimal> sumValorByDataPagamentoBetweenAndUsuario(@Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate, @Param("usuario") User usuario);
+
 }

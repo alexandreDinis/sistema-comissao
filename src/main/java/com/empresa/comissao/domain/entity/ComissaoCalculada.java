@@ -23,8 +23,16 @@ public class ComissaoCalculada {
     private Long id;
 
     @Convert(converter = YearMonthConverter.class)
-    @Column(name = "ano_mes_referencia", nullable = false, unique = true, length = 7)
+    @Column(name = "ano_mes_referencia", nullable = false, length = 7)
     private YearMonth anoMesReferencia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private User usuario;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     @Column(name = "faturamento_mensal_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal faturamentoMensalTotal;

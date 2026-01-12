@@ -12,15 +12,35 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class VeiculoService {
 
     private final VeiculoServicoRepository veiculoRepository;
 
-    public Map<String, Object> verificarPlaca(String placa) {
-        boolean exists = veiculoRepository.existsByPlaca(placa);
-        return Map.of(
-                "exists", exists,
-                "message", exists ? "Veículo já possui histórico de serviços." : "Veículo novo.");
+    public Map<String, Object> verificarPlaca(String placaRaw) {
+        // Validar e Normalizar
+        String placa = com.empresa.comissao.validation.ValidadorPlaca.normalizar(placaRaw);
+        com.empresa.comissao.validation.ValidadorPlaca.validar(placa);
+
+        log.info("🔍 Verificando placa: {}", placa);
+        List<VeiculoServico> veiculos = veiculoRepository.findByPlacaIgnoreCase(placa);
+        boolean exists = !veiculos.isEmpty();
+        log.info("✅ Placa existe: {}", exists);
+
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("existe", exists);
+        response.put("mensagem", exists ? "Veículo já cadastrado." : "Veículo disponível para cadastro.");
+
+        if (exists) {
+            // Return the most recent one or a summary
+            VeiculoServico recent = veiculos.get(0);
+            response.put("veiculoExistente", Map.of(
+                    "modelo", recent.getModelo(),
+                    "cor", recent.getCor(),
+                    "cliente", recent.getOrdemServico().getCliente().getNomeFantasia()));
+        }
+
+        return response;
     }
 
     public List<VeiculoHistoricoResponse> obterHistorico(String placa) {

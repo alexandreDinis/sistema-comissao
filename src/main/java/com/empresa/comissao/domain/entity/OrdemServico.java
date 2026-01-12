@@ -33,8 +33,15 @@ public class OrdemServico {
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "cliente_id")
-    private
-    Cliente cliente;
+    private Cliente cliente;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private User usuario;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 
     // Persisted total for performance
     @Column(nullable = false)

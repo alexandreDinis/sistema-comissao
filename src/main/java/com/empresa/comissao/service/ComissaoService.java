@@ -37,14 +37,25 @@ public class ComissaoService {
         private final DespesaRepository despesaRepository;
 
         @Transactional
-        public ComissaoCalculada calcularEObterComissaoMensal(int ano, int mes) {
+        public ComissaoCalculada calcularEObterComissaoMensal(int ano, int mes,
+                        com.empresa.comissao.domain.entity.User usuario) {
                 YearMonth anoMesReferencia = YearMonth.of(ano, mes);
 
-                log.info("🔍 Buscando comissão para: {}/{}", ano, mes);
+                log.info("🔍 Buscando comissão para: {}/{} - Usuário: {}", ano, mes,
+                                usuario != null ? usuario.getUsername() : "GLOBAL");
 
-                // 1. Verificar se a comissão já foi calculada e persistida para este mês
+                // ⛔ SAFETY: SaaS/Platform Admins (without Empresa) CANNOT generate commission
+                // data
+                if (usuario != null && usuario.getEmpresa() == null) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Administradores de sistema (SaaS/Plataforma) não possuem faturamento ou comissão calculada.");
+                }
+
+                // 1. Verificar se a comissão já foi calculada e persistida para este
+                // mês/usuário
                 Optional<ComissaoCalculada> comissaoExistente = comissaoCalculadaRepository
-                                .findByAnoMesReferencia(anoMesReferencia);
+                                .findByAnoMesReferenciaAndUsuario(anoMesReferencia, usuario);
+
                 if (comissaoExistente.isPresent()) {
                         log.info("✅ Comissão encontrada em cache: {}", anoMesReferencia);
                         return comissaoExistente.get();
@@ -52,22 +63,34 @@ public class ComissaoService {
 
                 log.info("📊 Comissão não encontrada. Calculando...");
 
-                // 2. Somar o faturamento total do mês
+                // 2. Somar o faturamento total do mês (Filtrando por usuário se informado)
                 LocalDate inicioDoMes = anoMesReferencia.atDay(1);
                 LocalDate fimDoMes = anoMesReferencia.atEndOfMonth();
 
-                log.info("📅 Período: {} a {}", inicioDoMes, fimDoMes);
-
-                BigDecimal faturamentoMensalTotal = faturamentoRepository
-                                .sumValorByDataFaturamentoBetween(inicioDoMes, fimDoMes)
-                                .orElse(BigDecimal.ZERO);
+                BigDecimal faturamentoMensalTotal;
+                if (usuario != null) {
+                        faturamentoMensalTotal = faturamentoRepository
+                                        .sumValorByDataFaturamentoBetweenAndUsuario(inicioDoMes, fimDoMes, usuario)
+                                        .orElse(BigDecimal.ZERO);
+                } else {
+                        faturamentoMensalTotal = faturamentoRepository
+                                        .sumValorByDataFaturamentoBetween(inicioDoMes, fimDoMes)
+                                        .orElse(BigDecimal.ZERO);
+                }
 
                 log.info("💰 Faturamento total: {}", faturamentoMensalTotal);
 
                 // 3. Somar os adiantamentos totais do mês
-                BigDecimal valorTotalAdiantamentos = pagamentoAdiantadoRepository
-                                .sumValorByDataPagamentoBetween(inicioDoMes, fimDoMes)
-                                .orElse(BigDecimal.ZERO);
+                BigDecimal valorTotalAdiantamentos;
+                if (usuario != null) {
+                        valorTotalAdiantamentos = pagamentoAdiantadoRepository
+                                        .sumValorByDataPagamentoBetweenAndUsuario(inicioDoMes, fimDoMes, usuario)
+                                        .orElse(BigDecimal.ZERO);
+                } else {
+                        valorTotalAdiantamentos = pagamentoAdiantadoRepository
+                                        .sumValorByDataPagamentoBetween(inicioDoMes, fimDoMes)
+                                        .orElse(BigDecimal.ZERO);
+                }
 
                 log.info("💸 Adiantamentos total: {}", valorTotalAdiantamentos);
 
@@ -97,12 +120,32 @@ public class ComissaoService {
                                 .valorBrutoComissao(valorBrutoComissao)
                                 .valorTotalAdiantamentos(valorTotalAdiantamentos)
                                 .saldoAReceber(saldoAReceber)
+                                .saldoAReceber(saldoAReceber)
+                                .usuario(usuario)
+                                .empresa(usuario != null ? usuario.getEmpresa() : null) // Bind business data to tenant
                                 .build();
 
                 ComissaoCalculada salva = comissaoCalculadaRepository.save(novaComissao);
                 log.info("💾 Comissão salva com ID: {}", salva.getId());
 
                 return salva;
+        }
+
+        // Overload for Global Report (backward compatibility)
+        @Transactional
+        public ComissaoCalculada calcularEObterComissaoMensal(int ano, int mes) {
+                return calcularEObterComissaoMensal(ano, mes, null);
+        }
+
+        @Transactional
+        public void invalidarCache(com.empresa.comissao.domain.entity.User usuario, YearMonth anoMes) {
+                log.info("🗑️ Invalidando cache de comissão para Usuário: {} - Mês: {}",
+                                usuario != null ? usuario.getEmail() : "GLOBAL", anoMes);
+                comissaoCalculadaRepository.findByAnoMesReferenciaAndUsuario(anoMes, usuario)
+                                .ifPresent(comissao -> {
+                                        comissaoCalculadaRepository.delete(comissao);
+                                        log.info("✅ Cache invalidado com sucesso.");
+                                });
         }
 
         @Transactional
@@ -117,16 +160,8 @@ public class ComissaoService {
                 Faturamento salvo = faturamentoRepository.save(faturamento);
                 log.info("✅ Faturamento registrado com ID: {}", salvo.getId());
 
-                // ✅ IMPORTANTE: Deletar a comissão do mês atual para forçar recalcular
-                YearMonth mesAtual = YearMonth.from(data);
-                Optional<ComissaoCalculada> comissaoExistente = comissaoCalculadaRepository
-                                .findByAnoMesReferencia(mesAtual);
-
-                if (comissaoExistente.isPresent()) {
-                        log.info("🗑️ Deletando comissão antiga para recalcular: {}", mesAtual);
-                        comissaoCalculadaRepository.delete(comissaoExistente.get());
-                        log.info("✅ Comissão deletada. Próxima requisição recalculará.");
-                }
+                // Invalidate Global Cache (since we don't know user here in this legacy method)
+                invalidarCache(null, YearMonth.from(data));
 
                 return salvo;
         }
@@ -143,8 +178,8 @@ public class ComissaoService {
                 PagamentoAdiantado salvo = pagamentoAdiantadoRepository.save(adiantamento);
                 log.info("✅ Adiantamento registrado com ID: {}", salvo.getId());
 
-                // ✅ IMPORTANTE: Deletar a comissão do mês atual para forçar recalcular
-                limparCacheComissao(YearMonth.from(data));
+                // Invalidate Global Cache
+                invalidarCache(null, YearMonth.from(data));
 
                 return salvo;
         }
@@ -240,14 +275,6 @@ public class ComissaoService {
                                 .totalGeral(totalGeral)
                                 .lucroLiquido(lucroLiquido)
                                 .build();
-        }
-
-        private void limparCacheComissao(YearMonth anoMes) {
-                comissaoCalculadaRepository.findByAnoMesReferencia(anoMes)
-                                .ifPresent(comissao -> {
-                                        log.info("🗑️ Deletando comissão antiga para recalcular: {}", anoMes);
-                                        comissaoCalculadaRepository.delete(comissao);
-                                });
         }
 
         public List<Faturamento> listarFaturamentos() {

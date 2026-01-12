@@ -1,0 +1,5 @@
+        email        |    role     | active | empresa_id 
+---------------------+-------------+--------+------------
+ saas@plataforma.com | SUPER_ADMIN | t      |           
+(1 row)
+

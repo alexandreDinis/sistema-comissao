@@ -1,37 +1,17 @@
-version: '3.8'
+version: "3.9"
 
 services:
   postgres:
-    image: postgres:15-alpine
-    container_name: comissao-postgres
+    image: postgres:16-alpine
+    container_name: postgres-comissao
     environment:
       POSTGRES_DB: comissaodb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: comissao
+      POSTGRES_PASSWORD: comissao
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - comissao-network
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: comissao-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
-    networks:
-      - comissao-network
+      - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  postgres-data:
-
-
-networks:
-  comissao-network:
-    driver: bridge
+  postgres_data:

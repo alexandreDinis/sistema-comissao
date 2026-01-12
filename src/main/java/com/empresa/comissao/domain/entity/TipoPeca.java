@@ -24,4 +24,8 @@ public class TipoPeca {
 
     @Column(nullable = false)
     private BigDecimal valorPadrao;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 }

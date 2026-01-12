@@ -31,14 +31,20 @@ public class AuthController {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final RateLimitingService rateLimitingService;
+    private final com.empresa.comissao.repository.EmpresaRepository empresaRepository;
 
     @PostMapping("/register")
     public ResponseEntity<AuthenticationResponse> register(
             @RequestBody RegisterRequest request) {
+
+        var defaultCompany = empresaRepository.findByNome("Empresa Padrão")
+                .orElseThrow(() -> new RuntimeException("Default Company not found. Run Migration V11."));
+
         var user = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(Role.USER) // Default role
+                .empresa(defaultCompany)
                 .active(false) // User must be approved by admin
                 .build();
         repository.save(user);

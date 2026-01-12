@@ -9,4 +9,6 @@ public interface VeiculoServicoRepository extends JpaRepository<VeiculoServico, 
     boolean existsByPlaca(String placa);
 
     java.util.List<VeiculoServico> findByPlacaOrderByOrdemServicoDataDesc(String placa);
+
+    java.util.List<VeiculoServico> findByPlacaIgnoreCase(String placa);
 }

@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class OrdemServicoService {
 
         private final OrdemServicoRepository osRepository;
@@ -23,23 +24,38 @@ public class OrdemServicoService {
         private final TipoPecaRepository tipoPecaRepository;
         private final VeiculoServicoRepository veiculoRepository;
         private final FaturamentoRepository faturamentoRepository;
+        private final ComissaoService comissaoService;
 
         @Transactional
         public OrdemServicoResponse atualizarStatus(Long id,
                         com.empresa.comissao.domain.enums.StatusOrdemServico novoStatus) {
+                log.info("🔄 Atualizando status da OS ID: {} para {}", id, novoStatus);
+
                 OrdemServico os = osRepository.findById(id)
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
 
                 if (novoStatus == com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA
                                 && os.getStatus() != com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA) {
 
+                        log.info("💰 OS {} finalizada. Gerando faturamento...", id);
+
+                        BigDecimal valorFaturamento = os.getValorTotal() != null ? os.getValorTotal() : BigDecimal.ZERO;
+
                         Faturamento faturamento = Faturamento.builder()
                                         .dataFaturamento(java.time.LocalDate.now())
-                                        .valor(os.getValorTotal())
+                                        .valor(valorFaturamento)
                                         .ordemServico(os)
+                                        .usuario(os.getUsuario())
+                                        .empresa(os.getEmpresa())
                                         .build();
 
                         faturamentoRepository.save(faturamento);
+                        log.info("✅ Faturamento gerado com sucesso para OS ID: {}", id);
+
+                        if (os.getUsuario() != null) {
+                                comissaoService.invalidarCache(os.getUsuario(),
+                                                java.time.YearMonth.from(faturamento.getDataFaturamento()));
+                        }
                 }
 
                 os.setStatus(novoStatus);
@@ -48,14 +64,40 @@ public class OrdemServicoService {
         }
 
         @Transactional
+        public void cancelar(Long id) {
+                OrdemServico os = osRepository.findById(id)
+                                .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+
+                if (os.getStatus() == com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA) {
+                        throw new IllegalStateException("Não é possível cancelar uma OS finalizada");
+                }
+
+                os.setStatus(com.empresa.comissao.domain.enums.StatusOrdemServico.CANCELADA);
+                osRepository.save(os);
+        }
+
+        @Transactional
         public OrdemServicoResponse criarOS(OrdemServicoRequest request) {
                 Cliente cliente = clienteRepository.findById(request.getClienteId())
                                 .orElseThrow(() -> new EntityNotFoundException("Cliente não encontrado"));
+
+                org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
+                                .getContext().getAuthentication();
+                com.empresa.comissao.domain.entity.User usuario = null;
+                com.empresa.comissao.domain.entity.Empresa empresa = null;
+
+                if (authentication != null
+                                && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
+                        usuario = (com.empresa.comissao.domain.entity.User) authentication.getPrincipal();
+                        empresa = usuario.getEmpresa();
+                }
 
                 OrdemServico os = OrdemServico.builder()
                                 .cliente(cliente)
                                 .data(request.getData())
                                 .valorTotal(BigDecimal.ZERO)
+                                .usuario(usuario)
+                                .empresa(empresa)
                                 .build();
 
                 os = osRepository.save(os);
@@ -67,9 +109,13 @@ public class OrdemServicoService {
                 OrdemServico os = osRepository.findById(request.getOrdemServicoId())
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
 
+                // Validar e Normalizar placa
+                String placaNormalizada = com.empresa.comissao.validation.ValidadorPlaca.normalizar(request.getPlaca());
+                com.empresa.comissao.validation.ValidadorPlaca.validar(placaNormalizada);
+
                 VeiculoServico veiculo = VeiculoServico.builder()
                                 .ordemServico(os)
-                                .placa(request.getPlaca())
+                                .placa(placaNormalizada)
                                 .modelo(request.getModelo())
                                 .cor(request.getCor())
                                 .valorTotal(BigDecimal.ZERO)

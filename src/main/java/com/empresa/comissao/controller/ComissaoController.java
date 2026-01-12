@@ -22,7 +22,16 @@ public class ComissaoController {
     @GetMapping("/{ano}/{mes}")
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<ComissaoResponse> obterComissaoMensal(@PathVariable int ano, @PathVariable int mes) {
-        ComissaoCalculada comissao = comissaoService.calcularEObterComissaoMensal(ano, mes);
+        org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        com.empresa.comissao.domain.entity.User usuario = null;
+
+        if (authentication != null
+                && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
+            usuario = (com.empresa.comissao.domain.entity.User) authentication.getPrincipal();
+        }
+
+        ComissaoCalculada comissao = comissaoService.calcularEObterComissaoMensal(ano, mes, usuario);
 
         ComissaoResponse response = new ComissaoResponse(
                 comissao.getAnoMesReferencia().toString(),

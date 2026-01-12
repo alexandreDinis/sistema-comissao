@@ -14,12 +14,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/veiculos")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 @Tag(name = "Veículos", description = "Gestão de Veículos e Histórico")
 public class VeiculoController {
 
     private final VeiculoService veiculoService;
 
-    @GetMapping("/check-placa")
+    @GetMapping("/verificar-placa")
     @Operation(summary = "Verificar existência de placa", description = "Retorna se a placa já existe no banco de dados.")
     public ResponseEntity<Map<String, Object>> verificarPlaca(@RequestParam String placa) {
         return ResponseEntity.ok(veiculoService.verificarPlaca(placa));

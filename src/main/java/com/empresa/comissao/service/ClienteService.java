@@ -19,7 +19,10 @@ public class ClienteService {
 
     @Transactional
     public ClienteResponse criar(ClienteRequest request) {
-        Cliente cliente = mapToEntity(request);
+        com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
+
+        Cliente cliente = new Cliente();
+        updateEntity(cliente, request); // Changed from updateClienteData to updateEntity for syntactic correctness
         cliente = clienteRepository.save(cliente);
         return mapToResponse(cliente);
     }
@@ -28,6 +31,8 @@ public class ClienteService {
     public ClienteResponse atualizar(Long id, ClienteRequest request) {
         Cliente cliente = clienteRepository.findById(id)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Cliente não encontrado"));
+
+        com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
 
         updateEntity(cliente, request);
         cliente = clienteRepository.save(cliente);
@@ -60,26 +65,6 @@ public class ClienteService {
     // Deprecated or redirect
     public List<ClienteResponse> listarTodos() {
         return listar(null, null, null, null);
-    }
-
-    private Cliente mapToEntity(ClienteRequest r) {
-        return Cliente.builder()
-                .razaoSocial(r.getRazaoSocial())
-                .nomeFantasia(r.getNomeFantasia())
-                .cnpj(r.getCnpj())
-                .status(r.getStatus() != null ? r.getStatus() : com.empresa.comissao.domain.enums.StatusCliente.ATIVO)
-                .email(r.getEmail())
-                .contato(r.getContato())
-                .logradouro(r.getLogradouro())
-                .numero(r.getNumero())
-                .complemento(r.getComplemento())
-                .bairro(r.getBairro())
-                .cidade(r.getCidade())
-                .estado(r.getEstado())
-                .cep(r.getCep())
-                // Legacy field support
-                .endereco(r.getEndereco())
-                .build();
     }
 
     private void updateEntity(Cliente c, ClienteRequest r) {

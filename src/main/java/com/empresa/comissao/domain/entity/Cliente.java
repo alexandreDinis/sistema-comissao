@@ -42,4 +42,8 @@ public class Cliente {
     private String cidade;
     private String estado;
     private String cep;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    private Empresa empresa;
 }

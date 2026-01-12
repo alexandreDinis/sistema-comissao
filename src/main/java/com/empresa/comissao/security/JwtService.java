@@ -31,7 +31,12 @@ public class JwtService {
     }
 
     public String generateToken(UserDetails userDetails) {
-        return generateToken(new HashMap<>(), userDetails);
+        Map<String, Object> claims = new HashMap<>();
+        if (userDetails instanceof com.empresa.comissao.domain.entity.User) {
+            com.empresa.comissao.domain.entity.User user = (com.empresa.comissao.domain.entity.User) userDetails;
+            claims.put("empresaId", user.getEmpresa() != null ? user.getEmpresa().getId() : null);
+        }
+        return generateToken(claims, userDetails);
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {

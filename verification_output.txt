@@ -1,0 +1,12 @@
+        email        | empresa_id 
+---------------------+------------
+ saas@plataforma.com |           
+(1 row)
+
+         codigo          
+-------------------------
+ PLATFORM_DASHBOARD_VIEW
+ PLATFORM_COMPANY_MANAGE
+ PLATFORM_PLAN_MANAGE
+(3 rows)
+

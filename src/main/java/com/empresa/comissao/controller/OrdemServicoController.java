@@ -59,4 +59,11 @@ public class OrdemServicoController {
                 .valueOf(novoStatusStr);
         return ResponseEntity.ok(osService.atualizarStatus(id, novoStatus));
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Cancelar OS")
+    public ResponseEntity<Void> cancelar(@PathVariable Long id) {
+        osService.cancelar(id);
+        return ResponseEntity.noContent().build();
+    }
 }
