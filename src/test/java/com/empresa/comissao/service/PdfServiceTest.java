@@ -11,7 +11,10 @@ public class PdfServiceTest {
 
     @Test
     public void gerarPdf_DeveGerarBytes() {
-        PdfService service = new PdfService();
+        // Mock dependencies
+        org.thymeleaf.TemplateEngine templateEngine = org.mockito.Mockito.mock(org.thymeleaf.TemplateEngine.class);
+        PdfService service = new PdfService(templateEngine);
+
         RelatorioFinanceiroDTO dto = RelatorioFinanceiroDTO.builder()
                 .ano(2024)
                 .mes(1)
@@ -22,7 +25,17 @@ public class PdfServiceTest {
                 .despesasPorCategoria(new HashMap<>())
                 .build();
 
-        byte[] pdf = service.gerarRelatorioFinanceiroPdf(dto);
+        // Mock thymeleaf processing
+        org.mockito.Mockito
+                .when(templateEngine.process(org.mockito.ArgumentMatchers.eq("pdf/relatorio-financeiro"),
+                        org.mockito.ArgumentMatchers.any(org.thymeleaf.context.Context.class)))
+                .thenReturn("<html><body>Mock PDF Content</body></html>");
+
+        // Pass null as Empresa since it's allowed/handled (or mock it if needed)
+        // Since the method is protected against null empresa, null is fine for basic
+        // test
+        byte[] pdf = service.gerarRelatorioFinanceiroPdf(dto, null);
+
         Assertions.assertNotNull(pdf);
         Assertions.assertTrue(pdf.length > 0);
     }

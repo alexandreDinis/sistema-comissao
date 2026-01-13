@@ -30,6 +30,9 @@ public class RelatorioControllerTest {
     @MockBean
     private PdfService pdfService;
 
+    @MockBean
+    private com.empresa.comissao.repository.EmpresaRepository empresaRepository;
+
     @Test
     @WithMockUser(username = "admin", roles = { "ADMIN" })
     public void gerarRelatorio_DeveRetornarRelatorio() throws Exception {
@@ -53,7 +56,7 @@ public class RelatorioControllerTest {
         byte[] fakePdf = new byte[] { 1, 2, 3 };
 
         when(comissaoService.gerarRelatorioFinanceiro(eq(2024), eq(1), any(), any())).thenReturn(dto);
-        when(pdfService.gerarRelatorioFinanceiroPdf(dto)).thenReturn(fakePdf);
+        when(pdfService.gerarRelatorioFinanceiroPdf(eq(dto), any())).thenReturn(fakePdf);
 
         mockMvc.perform(get("/api/v1/relatorios/2024/1/pdf"))
                 .andExpect(status().isOk())

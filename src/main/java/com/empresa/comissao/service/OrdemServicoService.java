@@ -64,6 +64,50 @@ public class OrdemServicoService {
         }
 
         @Transactional
+        public OrdemServicoResponse atualizarOS(Long id,
+                        com.empresa.comissao.dto.request.OrdemServicoPatchRequest request) {
+                OrdemServico os = osRepository.findById(id)
+                                .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+
+                // Validation similar to create
+                if (request.getTipoDesconto() != null && request.getValorDesconto() != null) {
+                        if (request.getTipoDesconto() == com.empresa.comissao.domain.enums.TipoDesconto.PERCENTUAL &&
+                                        request.getValorDesconto().compareTo(new BigDecimal("100")) > 0) {
+                                throw new IllegalArgumentException("Desconto percentual não pode exceder 100%");
+                        }
+                }
+
+                if (request.getData() != null) {
+                        os.setData(request.getData());
+                }
+
+                boolean recalcular = false;
+                if (request.getTipoDesconto() != null) {
+                        os.setTipoDesconto(request.getTipoDesconto());
+                        recalcular = true;
+                }
+                if (request.getValorDesconto() != null) {
+                        os.setValorDesconto(request.getValorDesconto());
+                        recalcular = true;
+                }
+
+                // If user sets value to 0, it might be sent as 0, but if null it means no
+                // change?
+                // Wait, if I want to remove discount? DTO sends null.
+                // But my DTO logic above means "if not null, update".
+                // How to clear discount?
+                // Maybe if tipoDesconto is sent?
+                // For now assuming we are applying/updating discount.
+
+                if (recalcular) {
+                        os.recalcularTotal();
+                }
+
+                os = osRepository.save(os);
+                return mapToResponse(os);
+        }
+
+        @Transactional
         public void cancelar(Long id) {
                 OrdemServico os = osRepository.findById(id)
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
@@ -92,10 +136,20 @@ public class OrdemServicoService {
                         empresa = usuario.getEmpresa();
                 }
 
+                // Validate discount
+                if (request.getTipoDesconto() != null && request.getValorDesconto() != null) {
+                        if (request.getTipoDesconto() == com.empresa.comissao.domain.enums.TipoDesconto.PERCENTUAL &&
+                                        request.getValorDesconto().compareTo(new BigDecimal("100")) > 0) {
+                                throw new IllegalArgumentException("Desconto percentual não pode exceder 100%");
+                        }
+                }
+
                 OrdemServico os = OrdemServico.builder()
                                 .cliente(cliente)
                                 .data(request.getData())
                                 .valorTotal(BigDecimal.ZERO)
+                                .tipoDesconto(request.getTipoDesconto())
+                                .valorDesconto(request.getValorDesconto())
                                 .usuario(usuario)
                                 .empresa(empresa)
                                 .build();
@@ -179,6 +233,10 @@ public class OrdemServicoService {
                                 .data(os.getData())
                                 .status(os.getStatus())
                                 .valorTotal(os.getValorTotal())
+                                .tipoDesconto(os.getTipoDesconto())
+                                .valorDesconto(os.getValorDesconto())
+                                .valorTotalSemDesconto(os.getValorTotalSemDesconto())
+                                .valorTotalComDesconto(os.getValorTotalComDesconto())
                                 .cliente(ClienteResponse.builder()
                                                 .id(os.getCliente().getId())
                                                 .razaoSocial(os.getCliente().getRazaoSocial())

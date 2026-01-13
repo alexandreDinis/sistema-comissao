@@ -1,5 +1,6 @@
 package com.empresa.comissao.dto.response;
 
+import com.empresa.comissao.domain.enums.TipoDesconto;
 import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -13,6 +14,12 @@ public class OrdemServicoResponse {
     private LocalDate data;
     private com.empresa.comissao.domain.enums.StatusOrdemServico status;
     private ClienteResponse cliente;
-    private BigDecimal valorTotal;
+    private BigDecimal valorTotal; // Legacy field for backward compatibility
     private List<VeiculoResponse> veiculos;
+
+    // Discount fields
+    private TipoDesconto tipoDesconto;
+    private BigDecimal valorDesconto;
+    private BigDecimal valorTotalSemDesconto;
+    private BigDecimal valorTotalComDesconto;
 }

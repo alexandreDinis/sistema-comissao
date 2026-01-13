@@ -30,4 +30,24 @@ public interface FaturamentoRepository extends JpaRepository<Faturamento, Long> 
                         @Param("endDate") LocalDate endDate, @Param("empresa") Empresa empresa);
 
         List<Faturamento> findByEmpresa(Empresa empresa);
+
+        // YoY Comparison Queries
+        @Query("SELECT COALESCE(SUM(f.valor), 0) FROM Faturamento f WHERE f.empresa = :empresa " +
+                        "AND YEAR(f.dataFaturamento) = :ano AND MONTH(f.dataFaturamento) = :mes")
+        BigDecimal sumValorByAnoAndMesAndEmpresa(@Param("ano") int ano, @Param("mes") int mes,
+                        @Param("empresa") Empresa empresa);
+
+        @Query("SELECT COALESCE(SUM(f.valor), 0) FROM Faturamento f WHERE f.usuario = :usuario " +
+                        "AND YEAR(f.dataFaturamento) = :ano AND MONTH(f.dataFaturamento) = :mes")
+        BigDecimal sumValorByAnoAndMesAndUsuario(@Param("ano") int ano, @Param("mes") int mes,
+                        @Param("usuario") User usuario);
+
+        @Query("SELECT COALESCE(SUM(f.valor), 0) FROM Faturamento f WHERE f.empresa = :empresa " +
+                        "AND YEAR(f.dataFaturamento) = :ano")
+        BigDecimal sumValorByAnoAndEmpresa(@Param("ano") int ano, @Param("empresa") Empresa empresa);
+
+        @Query("SELECT MONTH(f.dataFaturamento) as mes, SUM(f.valor) as total FROM Faturamento f " +
+                        "WHERE f.empresa = :empresa AND YEAR(f.dataFaturamento) = :ano " +
+                        "GROUP BY MONTH(f.dataFaturamento) ORDER BY MONTH(f.dataFaturamento)")
+        List<Object[]> findFaturamentoMensalByAnoAndEmpresa(@Param("ano") int ano, @Param("empresa") Empresa empresa);
 }

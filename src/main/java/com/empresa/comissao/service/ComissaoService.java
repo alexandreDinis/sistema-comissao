@@ -8,6 +8,9 @@ import com.empresa.comissao.domain.enums.CategoriaDespesa;
 import com.empresa.comissao.domain.model.FaixaComissao;
 import com.empresa.comissao.domain.model.TabelaComissao;
 import com.empresa.comissao.dto.RelatorioFinanceiroDTO;
+import com.empresa.comissao.dto.ComparacaoFaturamentoDTO;
+import com.empresa.comissao.dto.MesFaturamentoDTO;
+import com.empresa.comissao.dto.RelatorioAnualDTO;
 import com.empresa.comissao.repository.ComissaoCalculadaRepository;
 import com.empresa.comissao.repository.DespesaRepository;
 import com.empresa.comissao.repository.FaturamentoRepository;
@@ -396,5 +399,185 @@ public class ComissaoService {
 
         public List<Despesa> listarDespesas() {
                 return despesaRepository.findAll();
+        }
+
+        /**
+         * Obtém comparação Year-over-Year de faturamento para um mês específico.
+         * Compara o faturamento do mês atual com o mesmo mês do ano anterior.
+         */
+        public ComparacaoFaturamentoDTO obterComparacaoYoY(int ano, int mes,
+                        com.empresa.comissao.domain.entity.User usuario,
+                        com.empresa.comissao.domain.entity.Empresa empresa) {
+
+                log.info("📊 Calculando comparação YoY para {}/{} - Empresa: {}", ano, mes,
+                                empresa != null ? empresa.getNome() : "N/A");
+
+                // Safety check for SaaS admins
+                if (empresa == null && usuario != null && usuario.getEmpresa() == null) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Administradores de sistema não possuem dados de faturamento.");
+                }
+
+                // Determine which empresa to use
+                com.empresa.comissao.domain.entity.Empresa empresaToUse = empresa != null ? empresa
+                                : (usuario != null ? usuario.getEmpresa() : null);
+
+                if (empresaToUse == null) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Empresa é obrigatória para cálculo de comparação YoY.");
+                }
+
+                // Get current year/month revenue
+                BigDecimal faturamentoAtual = faturamentoRepository
+                                .sumValorByAnoAndMesAndEmpresa(ano, mes, empresaToUse);
+
+                // Get previous year revenue for the same month
+                int anoAnterior = ano - 1;
+                BigDecimal faturamentoAnoAnterior = faturamentoRepository
+                                .sumValorByAnoAndMesAndEmpresa(anoAnterior, mes, empresaToUse);
+
+                boolean temDadosAnoAnterior = faturamentoAnoAnterior.compareTo(BigDecimal.ZERO) > 0;
+
+                BigDecimal diferencaAbsoluta = null;
+                BigDecimal diferencaPercentual = null;
+
+                if (temDadosAnoAnterior) {
+                        diferencaAbsoluta = faturamentoAtual.subtract(faturamentoAnoAnterior)
+                                        .setScale(2, RoundingMode.HALF_UP);
+
+                        // Calculate percentage: ((atual - anterior) / anterior) * 100
+                        diferencaPercentual = diferencaAbsoluta
+                                        .divide(faturamentoAnoAnterior, 4, RoundingMode.HALF_UP)
+                                        .multiply(new BigDecimal("100"))
+                                        .setScale(2, RoundingMode.HALF_UP);
+
+                        log.info("✅ YoY: Atual={}, Anterior={}, Diferença={} ({}%)",
+                                        faturamentoAtual, faturamentoAnoAnterior, diferencaAbsoluta,
+                                        diferencaPercentual);
+                } else {
+                        log.info("ℹ️ Sem dados do ano anterior para comparação.");
+                }
+
+                return ComparacaoFaturamentoDTO.builder()
+                                .anoAtual(ano)
+                                .mesAtual(mes)
+                                .faturamentoAtual(faturamentoAtual)
+                                .faturamentoAnoAnterior(temDadosAnoAnterior ? faturamentoAnoAnterior : null)
+                                .diferencaAbsoluta(diferencaAbsoluta)
+                                .diferencaPercentual(diferencaPercentual)
+                                .temDadosAnoAnterior(temDadosAnoAnterior)
+                                .build();
+        }
+
+        /**
+         * Gera relatório anual consolidado com comparação YoY para cada mês.
+         */
+        public RelatorioAnualDTO gerarRelatorioAnual(int ano,
+                        com.empresa.comissao.domain.entity.User usuario,
+                        com.empresa.comissao.domain.entity.Empresa empresa) {
+
+                log.info("📅 Gerando relatório anual para {} - Empresa: {}", ano,
+                                empresa != null ? empresa.getNome() : "N/A");
+
+                // Safety check
+                if (empresa == null && usuario != null && usuario.getEmpresa() == null) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Administradores de sistema não possuem dados de faturamento.");
+                }
+
+                com.empresa.comissao.domain.entity.Empresa empresaToUse = empresa != null ? empresa
+                                : (usuario != null ? usuario.getEmpresa() : null);
+
+                if (empresaToUse == null) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Empresa é obrigatória para geração de relatório anual.");
+                }
+
+                // Get monthly revenue for current year
+                List<Object[]> faturamentosMensais = faturamentoRepository
+                                .findFaturamentoMensalByAnoAndEmpresa(ano, empresaToUse);
+
+                // Build map for quick lookup
+                Map<Integer, BigDecimal> faturamentoPorMes = new java.util.HashMap<>();
+                for (Object[] row : faturamentosMensais) {
+                        Integer mes = (Integer) row[0];
+                        BigDecimal total = (BigDecimal) row[1];
+                        faturamentoPorMes.put(mes, total);
+                }
+
+                // Get previous year data
+                int anoAnterior = ano - 1;
+                List<Object[]> faturamentosMensaisAnoAnterior = faturamentoRepository
+                                .findFaturamentoMensalByAnoAndEmpresa(anoAnterior, empresaToUse);
+
+                Map<Integer, BigDecimal> faturamentoPorMesAnoAnterior = new java.util.HashMap<>();
+                for (Object[] row : faturamentosMensaisAnoAnterior) {
+                        Integer mes = (Integer) row[0];
+                        BigDecimal total = (BigDecimal) row[1];
+                        faturamentoPorMesAnoAnterior.put(mes, total);
+                }
+
+                // Build list of months with revenue data
+                List<MesFaturamentoDTO> mesesComFaturamento = new java.util.ArrayList<>();
+                String[] nomesMeses = { "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro" };
+
+                BigDecimal totalAno = BigDecimal.ZERO;
+                BigDecimal totalAnoAnterior = BigDecimal.ZERO;
+
+                for (int mes = 1; mes <= 12; mes++) {
+                        BigDecimal faturamentoMes = faturamentoPorMes.getOrDefault(mes, BigDecimal.ZERO);
+                        BigDecimal faturamentoMesAnoAnterior = faturamentoPorMesAnoAnterior.getOrDefault(mes,
+                                        BigDecimal.ZERO);
+
+                        totalAno = totalAno.add(faturamentoMes);
+                        totalAnoAnterior = totalAnoAnterior.add(faturamentoMesAnoAnterior);
+
+                        BigDecimal variacao = null;
+                        BigDecimal variacaoPercentual = null;
+
+                        if (faturamentoMesAnoAnterior.compareTo(BigDecimal.ZERO) > 0) {
+                                variacao = faturamentoMes.subtract(faturamentoMesAnoAnterior)
+                                                .setScale(2, RoundingMode.HALF_UP);
+                                variacaoPercentual = variacao
+                                                .divide(faturamentoMesAnoAnterior, 4, RoundingMode.HALF_UP)
+                                                .multiply(new BigDecimal("100"))
+                                                .setScale(2, RoundingMode.HALF_UP);
+                        }
+
+                        mesesComFaturamento.add(MesFaturamentoDTO.builder()
+                                        .mes(mes)
+                                        .nomeMes(nomesMeses[mes - 1])
+                                        .faturamento(faturamentoMes.setScale(2, RoundingMode.HALF_UP))
+                                        .faturamentoAnoAnterior(faturamentoMesAnoAnterior.compareTo(BigDecimal.ZERO) > 0
+                                                        ? faturamentoMesAnoAnterior.setScale(2, RoundingMode.HALF_UP)
+                                                        : null)
+                                        .variacao(variacao)
+                                        .variacaoPercentual(variacaoPercentual)
+                                        .build());
+                }
+
+                // Calculate annual difference
+                BigDecimal diferencaAnual = totalAno.subtract(totalAnoAnterior).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal crescimentoPercentualAnual = BigDecimal.ZERO;
+
+                if (totalAnoAnterior.compareTo(BigDecimal.ZERO) > 0) {
+                        crescimentoPercentualAnual = diferencaAnual
+                                        .divide(totalAnoAnterior, 4, RoundingMode.HALF_UP)
+                                        .multiply(new BigDecimal("100"))
+                                        .setScale(2, RoundingMode.HALF_UP);
+                }
+
+                log.info("✅ Relatório anual gerado: Total={}, Total Ano Anterior={}, Crescimento={}%",
+                                totalAno, totalAnoAnterior, crescimentoPercentualAnual);
+
+                return RelatorioAnualDTO.builder()
+                                .ano(ano)
+                                .mesesComFaturamento(mesesComFaturamento)
+                                .faturamentoTotalAno(totalAno.setScale(2, RoundingMode.HALF_UP))
+                                .faturamentoTotalAnoAnterior(totalAnoAnterior.setScale(2, RoundingMode.HALF_UP))
+                                .diferencaAnual(diferencaAnual)
+                                .crescimentoPercentualAnual(crescimentoPercentualAnual)
+                                .build();
         }
 }

@@ -60,6 +60,13 @@ public class OrdemServicoController {
         return ResponseEntity.ok(osService.atualizarStatus(id, novoStatus));
     }
 
+    @PatchMapping("/{id}")
+    @Operation(summary = "Atualizar OS (apenas campos selecionados, como desconto)")
+    public ResponseEntity<OrdemServicoResponse> atualizar(@PathVariable Long id,
+            @RequestBody @Valid com.empresa.comissao.dto.request.OrdemServicoPatchRequest request) {
+        return ResponseEntity.ok(osService.atualizarOS(id, request));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Cancelar OS")
     public ResponseEntity<Void> cancelar(@PathVariable Long id) {

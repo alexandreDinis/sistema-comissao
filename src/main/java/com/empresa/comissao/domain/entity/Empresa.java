@@ -24,7 +24,17 @@ public class Empresa {
     @Column(nullable = false)
     private String nome;
 
+    @Column(name = "razao_social")
+    private String razaoSocial;
+
     private String cnpj;
+
+    @Column(name = "logo_path")
+    private String logoPath;
+
+    private String endereco;
+    private String telefone;
+    private String email;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
