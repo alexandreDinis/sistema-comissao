@@ -104,7 +104,18 @@
 			<artifactId>bucket4j-spring-boot-starter</artifactId>
 			<version>0.10.3</version>
 		</dependency>
-	</dependencies>
+		<!-- AWS S3 SDK (Compatible with R2/MinIO) -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.21.0</version>
+		</dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
 
 	<build>
 		<plugins>

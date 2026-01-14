@@ -1,11 +1,14 @@
 package com.empresa.comissao.service;
 
 import com.empresa.comissao.domain.entity.Empresa;
+import com.empresa.comissao.domain.entity.OrdemServico;
+import com.empresa.comissao.domain.enums.StatusOrdemServico;
+import com.empresa.comissao.domain.enums.TipoDesconto;
 import com.empresa.comissao.dto.RelatorioAnualDTO;
 import com.empresa.comissao.dto.RelatorioFinanceiroDTO;
 import com.lowagie.text.DocumentException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
@@ -30,14 +33,20 @@ import java.util.Locale;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PdfService {
 
     private final TemplateEngine templateEngine;
+    private final StorageService storageService;
 
     @Value("${app.upload.dir:uploads/logos}")
     private String uploadDir;
+
+    @Autowired
+    public PdfService(TemplateEngine templateEngine, @Autowired(required = false) StorageService storageService) {
+        this.templateEngine = templateEngine;
+        this.storageService = storageService;
+    }
 
     public byte[] gerarRelatorioAnualPdf(RelatorioAnualDTO relatorio, Empresa empresa) {
         try {
@@ -120,6 +129,15 @@ public class PdfService {
     }
 
     private String carregarLogoBase64(String logoPath) throws IOException {
+        // Try S3 storage first if available
+        if (storageService != null) {
+            byte[] imageBytes = storageService.getFileBytes(logoPath);
+            if (imageBytes != null) {
+                return Base64.getEncoder().encodeToString(imageBytes);
+            }
+        }
+
+        // Fallback to local filesystem
         Path path = Paths.get(uploadDir, logoPath);
         if (Files.exists(path)) {
             byte[] imageBytes = Files.readAllBytes(path);
@@ -128,11 +146,71 @@ public class PdfService {
         return null;
     }
 
+    /**
+     * Gera PDF da Ordem de Serviço com dados da empresa, cliente e veículos.
+     */
+    public byte[] gerarOrdemServicoPdf(OrdemServico os) {
+        try {
+            Context context = new Context(Locale.of("pt", "BR"));
+            context.setVariable("empresa", prepararDadosEmpresa(os.getEmpresa()));
+            context.setVariable("os", os);
+            context.setVariable("dataGeracao", LocalDateTime.now());
+
+            // Status description
+            context.setVariable("statusDescricao", getStatusDescricao(os.getStatus()));
+
+            // Cliente CNPJ formatado
+            Map<String, Object> clienteData = new HashMap<>();
+            if (os.getCliente() != null && os.getCliente().getCnpj() != null) {
+                clienteData.put("cnpjFormatado", formatarCNPJ(os.getCliente().getCnpj()));
+            }
+            context.setVariable("cliente", clienteData);
+
+            // Calcular desconto se aplicável
+            BigDecimal descontoCalculado = calcularDesconto(os);
+            context.setVariable("descontoCalculado", descontoCalculado);
+
+            String htmlContent = templateEngine.process("pdf/ordem-servico", context);
+            if (htmlContent == null) {
+                throw new RuntimeException("Erro ao processar template: resultado nulo");
+            }
+
+            return htmlToPdf(htmlContent);
+        } catch (Exception e) {
+            log.error("Erro ao gerar PDF da Ordem de Serviço {}", os.getId(), e);
+            throw new RuntimeException("Erro ao gerar PDF", e);
+        }
+    }
+
+    private String getStatusDescricao(StatusOrdemServico status) {
+        return switch (status) {
+            case ABERTA -> "Aberta";
+            case EM_EXECUCAO -> "Em Execução";
+            case FINALIZADA -> "Finalizada";
+            case CANCELADA -> "Cancelada";
+        };
+    }
+
+    private BigDecimal calcularDesconto(OrdemServico os) {
+        if (os.getTipoDesconto() == null || os.getValorDesconto() == null ||
+                os.getValorDesconto().compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+
+        if (os.getTipoDesconto() == TipoDesconto.PERCENTUAL) {
+            return os.getValorTotalSemDesconto()
+                    .multiply(os.getValorDesconto())
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        } else {
+            return os.getValorDesconto();
+        }
+    }
+
     private byte[] htmlToPdf(String html) throws DocumentException, IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
         ITextRenderer renderer = new ITextRenderer();
-        renderer.setDocumentFromString(html);
+        renderer.setDocumentFromString(java.util.Objects.requireNonNull(html, "HTML content cannot be null"));
         renderer.layout();
         renderer.createPDF(outputStream);
 

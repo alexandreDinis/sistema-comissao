@@ -4,19 +4,28 @@ import com.empresa.comissao.domain.entity.Empresa;
 import com.empresa.comissao.domain.entity.User;
 import com.empresa.comissao.domain.enums.ModoComissao;
 import com.empresa.comissao.repository.EmpresaRepository;
+import com.empresa.comissao.service.StorageService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/empresa")
 @RequiredArgsConstructor
+@Slf4j
 public class EmpresaController {
 
     private final EmpresaRepository empresaRepository;
+    private final StorageService storageService;
 
     /**
      * Get current empresa configuration for the authenticated user's company.
@@ -32,7 +41,8 @@ public class EmpresaController {
         return ResponseEntity.ok(new EmpresaConfigResponse(
                 empresa.getId(),
                 empresa.getNome(),
-                empresa.getModoComissao()));
+                empresa.getModoComissao(),
+                empresa.getLogoPath() != null ? storageService.getFileUrl(empresa.getLogoPath()) : null));
     }
 
     /**
@@ -61,76 +71,103 @@ public class EmpresaController {
         return ResponseEntity.ok(new EmpresaConfigResponse(
                 saved.getId(),
                 saved.getNome(),
-                saved.getModoComissao()));
+                saved.getModoComissao(),
+                saved.getLogoPath() != null ? storageService.getFileUrl(saved.getLogoPath()) : null));
     }
 
-    @org.springframework.beans.factory.annotation.Value("${app.upload.dir:uploads/logos}")
-    private String uploadDir;
-
+    /**
+     * Upload company logo.
+     * Stores in S3 (prod) or local filesystem (dev).
+     */
     @PostMapping("/{id}/logo")
     @PreAuthorize("hasRole('ADMIN_EMPRESA')")
     public ResponseEntity<?> uploadLogo(
             @PathVariable Long id,
-            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal User user) {
 
         // Security check: Ensure admin can only update their own company
         if (user.getEmpresa() == null || !user.getEmpresa().getId().equals(id)) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
-                    .body("Você só pode atualizar o logo da sua própria empresa.");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Você só pode atualizar o logo da sua própria empresa."));
         }
 
         try {
-            // Validate file content type
-            String contentType = file.getContentType();
-            if (contentType == null || (!contentType.equals("image/png") && !contentType.equals("image/jpeg"))) {
-                return ResponseEntity.badRequest().body("Apenas PNG ou JPEG são permitidos.");
-            }
-
-            // Validate file size (max 2MB)
-            if (file.getSize() > 2 * 1024 * 1024) {
-                return ResponseEntity.badRequest().body("Arquivo muito grande. Máximo 2MB.");
-            }
-
-            // Generate unique filename
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.lastIndexOf(".") > 0) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-            } else {
-                extension = contentType.equals("image/png") ? ".png" : ".jpg";
-            }
-
-            String fileName = "empresa-" + id + "-" + System.currentTimeMillis() + extension;
-
-            // Ensure upload directory exists
-            java.nio.file.Path uploadPath = java.nio.file.Paths.get(uploadDir);
-            if (!java.nio.file.Files.exists(uploadPath)) {
-                java.nio.file.Files.createDirectories(uploadPath);
-            }
-
-            // Save file
-            java.nio.file.Path filePath = uploadPath.resolve(fileName);
-            java.nio.file.Files.copy(file.getInputStream(), filePath,
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-
-            // Update empresa logic
             Empresa empresa = empresaRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
-            // Delete old logo if exists logic could be added here
+            // Generate unique filename
+            String extension = getFileExtension(file);
+            String key = "logos/empresa-" + id + "-" + System.currentTimeMillis() + extension;
 
-            empresa.setLogoPath(fileName);
+            // Delete old logo if exists
+            if (empresa.getLogoPath() != null) {
+                storageService.deleteFile(empresa.getLogoPath());
+            }
+
+            // Upload new logo
+            String fileUrl = storageService.uploadFile(file, key);
+
+            // Update empresa
+            empresa.setLogoPath(key);
             empresaRepository.save(empresa);
 
-            return ResponseEntity.ok(java.util.Map.of(
-                    "message", "Logo atualizado com sucesso",
-                    "logoPath", fileName));
+            log.info("Logo updated for empresa {}: {}", id, key);
 
+            return ResponseEntity.ok(Map.of(
+                    "message", "Logo atualizado com sucesso",
+                    "logoUrl", fileUrl));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Erro ao fazer upload: " + e.getMessage());
+            log.error("Error uploading logo for empresa {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erro ao fazer upload: " + e.getMessage()));
         }
+    }
+
+    /**
+     * Get company logo by ID.
+     * Proxies the image from storage service.
+     */
+    @GetMapping("/{id}/logo")
+    public ResponseEntity<byte[]> getLogo(@PathVariable Long id) {
+        Empresa empresa = empresaRepository.findById(id).orElse(null);
+
+        if (empresa == null || empresa.getLogoPath() == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        byte[] imageBytes = storageService.getFileBytes(empresa.getLogoPath());
+        if (imageBytes == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        MediaType mediaType = empresa.getLogoPath().endsWith(".png")
+                ? MediaType.IMAGE_PNG
+                : MediaType.IMAGE_JPEG;
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .body(imageBytes);
+    }
+
+    private String getFileExtension(MultipartFile file) {
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null && originalFilename.lastIndexOf(".") > 0) {
+            return originalFilename.substring(originalFilename.lastIndexOf("."));
+        }
+        String contentType = file.getContentType();
+        if (contentType != null) {
+            return switch (contentType) {
+                case "image/png" -> ".png";
+                case "image/webp" -> ".webp";
+                default -> ".jpg";
+            };
+        }
+        return ".jpg";
     }
 
     // DTOs
@@ -139,6 +176,7 @@ public class EmpresaController {
         private final Long id;
         private final String nome;
         private final ModoComissao modoComissao;
+        private final String logoUrl;
     }
 
     @Data

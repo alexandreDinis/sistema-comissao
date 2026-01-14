@@ -221,6 +221,11 @@ public class OrdemServicoService {
                 return mapToResponse(os);
         }
 
+        public OrdemServico buscarEntidadePorId(Long id) {
+                return osRepository.findById(id)
+                                .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+        }
+
         public java.util.List<OrdemServicoResponse> listarTodas() {
                 return osRepository.findAll().stream()
                                 .map(this::mapToResponse)
