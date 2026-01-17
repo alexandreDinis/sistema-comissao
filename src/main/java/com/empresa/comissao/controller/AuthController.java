@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -107,7 +108,42 @@ public class AuthController {
                                 .token(jwtToken)
                                 .empresa(empresaInfo)
                                 .features(features)
+                                .mustChangePassword(user.isMustChangePassword())
                                 .build());
+        }
+
+        private final com.empresa.comissao.service.PasswordResetService passwordResetService;
+
+        @PostMapping("/forgot-password")
+        public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+                // Always return success to not reveal if email exists
+                passwordResetService.initiatePasswordReset(request.getEmail());
+                return ResponseEntity.ok(java.util.Map.of(
+                                "message", "Se o email estiver cadastrado, você receberá um link de recuperação."));
+        }
+
+        @PostMapping("/reset-password")
+        public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
+                if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
+                        return ResponseEntity.badRequest()
+                                        .body(java.util.Map.of("error", "Senha deve ter pelo menos 6 caracteres"));
+                }
+
+                boolean success = passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
+
+                if (!success) {
+                        return ResponseEntity.badRequest()
+                                        .body(java.util.Map.of("error", "Token inválido ou expirado"));
+                }
+
+                return ResponseEntity.ok(java.util.Map.of("message", "Senha alterada com sucesso"));
+        }
+
+        @GetMapping("/validate-reset-token")
+        public ResponseEntity<?> validateResetToken(
+                        @org.springframework.web.bind.annotation.RequestParam String token) {
+                boolean valid = passwordResetService.isTokenValid(token);
+                return ResponseEntity.ok(java.util.Map.of("valid", valid));
         }
 }
 
@@ -117,6 +153,7 @@ class AuthenticationResponse {
         private String token;
         private EmpresaInfo empresa;
         private java.util.List<String> features;
+        private boolean mustChangePassword;
 
         @Data
         @Builder
@@ -137,4 +174,15 @@ class RegisterRequest {
 class AuthenticationRequest {
         private String email;
         private String password;
+}
+
+@Data
+class ForgotPasswordRequest {
+        private String email;
+}
+
+@Data
+class ResetPasswordRequest {
+        private String token;
+        private String newPassword;
 }

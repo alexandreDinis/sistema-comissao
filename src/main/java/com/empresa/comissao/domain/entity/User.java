@@ -42,6 +42,10 @@ public class User implements UserDetails {
     @JoinTable(name = "user_features", joinColumns = @JoinColumn(name = "usuario_id"), inverseJoinColumns = @JoinColumn(name = "feature_id"))
     private java.util.Set<Feature> features;
 
+    @Builder.Default
+    @Column(name = "must_change_password")
+    private boolean mustChangePassword = false;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         java.util.List<GrantedAuthority> authorities = new java.util.ArrayList<>();

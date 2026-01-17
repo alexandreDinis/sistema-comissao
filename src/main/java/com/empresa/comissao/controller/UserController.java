@@ -213,6 +213,38 @@ public class UserController {
         repository.deleteById(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(
+            @RequestBody ChangePasswordRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+
+        // Validate current password
+        if (!passwordEncoder.matches(request.getCurrentPassword(), principal.getPassword())) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("error", "Senha atual incorreta"));
+        }
+
+        // Validate new password
+        if (request.getNewPassword() == null || request.getNewPassword().length() < 6) {
+            return ResponseEntity.badRequest()
+                    .body(java.util.Map.of("error", "Nova senha deve ter pelo menos 6 caracteres"));
+        }
+
+        // Update password
+        User user = repository.findById(principal.getId()).orElseThrow();
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setMustChangePassword(false);
+        repository.save(user);
+
+        return ResponseEntity.ok(java.util.Map.of("message", "Senha alterada com sucesso"));
+    }
+
+    @lombok.Data
+    static class ChangePasswordRequest {
+        private String currentPassword;
+        private String newPassword;
+    }
 }
 
 @lombok.Data
