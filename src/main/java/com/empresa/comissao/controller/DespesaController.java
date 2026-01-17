@@ -43,7 +43,8 @@ public class DespesaController {
 
     @GetMapping
     @Operation(summary = "Listar despesas", description = "Retorna todas as despesas cadastradas")
-    public ResponseEntity<List<Despesa>> listar() {
-        return ResponseEntity.ok(comissaoService.listarDespesas());
+    public ResponseEntity<List<Despesa>> listar(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+        return ResponseEntity.ok(comissaoService.listarDespesas(usuario != null ? usuario.getEmpresa() : null));
     }
 }

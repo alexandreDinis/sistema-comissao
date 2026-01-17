@@ -1,6 +1,7 @@
 package com.empresa.comissao.service;
 
 import com.empresa.comissao.dto.response.VeiculoHistoricoResponse;
+import com.empresa.comissao.domain.entity.Empresa;
 import com.empresa.comissao.domain.entity.VeiculoServico;
 import com.empresa.comissao.repository.VeiculoServicoRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,15 +18,19 @@ public class VeiculoService {
 
     private final VeiculoServicoRepository veiculoRepository;
 
-    public Map<String, Object> verificarPlaca(String placaRaw) {
+    /**
+     * Verifica se uma placa já existe para uma empresa específica (tenant
+     * isolation).
+     */
+    public Map<String, Object> verificarPlaca(String placaRaw, Empresa empresa) {
         // Validar e Normalizar
         String placa = com.empresa.comissao.validation.ValidadorPlaca.normalizar(placaRaw);
         com.empresa.comissao.validation.ValidadorPlaca.validar(placa);
 
-        log.info("🔍 Verificando placa: {}", placa);
-        List<VeiculoServico> veiculos = veiculoRepository.findByPlacaIgnoreCase(placa);
+        log.info("🔍 Verificando placa: {} para empresa: {}", placa, empresa.getNome());
+        List<VeiculoServico> veiculos = veiculoRepository.findByPlacaIgnoreCaseAndEmpresa(placa, empresa);
         boolean exists = !veiculos.isEmpty();
-        log.info("✅ Placa existe: {}", exists);
+        log.info("✅ Placa existe na empresa: {}", exists);
 
         Map<String, Object> response = new java.util.HashMap<>();
         response.put("existe", exists);
@@ -43,8 +48,13 @@ public class VeiculoService {
         return response;
     }
 
-    public List<VeiculoHistoricoResponse> obterHistorico(String placa) {
-        List<VeiculoServico> veiculos = veiculoRepository.findByPlacaOrderByOrdemServicoDataDesc(placa);
+    /**
+     * Obtém o histórico de um veículo para uma empresa específica (tenant
+     * isolation).
+     */
+    public List<VeiculoHistoricoResponse> obterHistorico(String placa, Empresa empresa) {
+        List<VeiculoServico> veiculos = veiculoRepository.findByPlacaAndEmpresaOrderByOrdemServicoDataDesc(placa,
+                empresa);
 
         return veiculos.stream().map(v -> {
             List<String> pecas = v.getPecas().stream()

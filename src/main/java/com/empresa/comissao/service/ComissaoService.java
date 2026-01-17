@@ -389,16 +389,25 @@ public class ComissaoService {
                                 .build();
         }
 
-        public List<Faturamento> listarFaturamentos() {
-                return faturamentoRepository.findAll();
+        public List<Faturamento> listarFaturamentos(com.empresa.comissao.domain.entity.Empresa empresa) {
+                if (empresa != null) {
+                        return faturamentoRepository.findByEmpresa(empresa);
+                }
+                return java.util.Collections.emptyList();
         }
 
-        public List<PagamentoAdiantado> listarAdiantamentos() {
-                return pagamentoAdiantadoRepository.findAll();
+        public List<PagamentoAdiantado> listarAdiantamentos(com.empresa.comissao.domain.entity.Empresa empresa) {
+                if (empresa != null) {
+                        return pagamentoAdiantadoRepository.findByEmpresa(empresa);
+                }
+                return java.util.Collections.emptyList();
         }
 
-        public List<Despesa> listarDespesas() {
-                return despesaRepository.findAll();
+        public List<Despesa> listarDespesas(com.empresa.comissao.domain.entity.Empresa empresa) {
+                if (empresa != null) {
+                        return despesaRepository.findByEmpresa(empresa);
+                }
+                return java.util.Collections.emptyList();
         }
 
         /**

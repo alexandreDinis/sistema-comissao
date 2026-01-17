@@ -30,8 +30,9 @@ public class TipoPecaController {
 
     @GetMapping
     @Operation(summary = "Listar catálogo")
-    public ResponseEntity<List<TipoPeca>> listar() {
-        return ResponseEntity.ok(tipoPecaService.listarTodos());
+    public ResponseEntity<List<TipoPeca>> listar(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+        return ResponseEntity.ok(tipoPecaService.listarTodos(usuario));
     }
 
     @DeleteMapping("/{id}")

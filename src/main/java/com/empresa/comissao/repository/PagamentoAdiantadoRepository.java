@@ -16,6 +16,8 @@ import com.empresa.comissao.domain.entity.User;
 @Repository
 public interface PagamentoAdiantadoRepository extends JpaRepository<PagamentoAdiantado, Long> {
 
+        java.util.List<PagamentoAdiantado> findByEmpresa(Empresa empresa);
+
         @Query("SELECT SUM(p.valor) FROM PagamentoAdiantado p WHERE p.dataPagamento BETWEEN :startDate AND :endDate")
         Optional<BigDecimal> sumValorByDataPagamentoBetween(@Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate);

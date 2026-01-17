@@ -227,9 +227,23 @@ public class OrdemServicoService {
         }
 
         public java.util.List<OrdemServicoResponse> listarTodas() {
-                return osRepository.findAll().stream()
-                                .map(this::mapToResponse)
-                                .collect(Collectors.toList());
+                // Get current user's empresa for tenant filtering
+                org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
+                                .getContext().getAuthentication();
+
+                if (authentication != null
+                                && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
+                        com.empresa.comissao.domain.entity.User usuario = (com.empresa.comissao.domain.entity.User) authentication
+                                        .getPrincipal();
+                        if (usuario.getEmpresa() != null) {
+                                return osRepository.findByEmpresa(usuario.getEmpresa()).stream()
+                                                .map(this::mapToResponse)
+                                                .collect(Collectors.toList());
+                        }
+                }
+
+                // Fallback: return empty list if no empresa (security: don't expose all data)
+                return java.util.Collections.emptyList();
         }
 
         private OrdemServicoResponse mapToResponse(OrdemServico os) {

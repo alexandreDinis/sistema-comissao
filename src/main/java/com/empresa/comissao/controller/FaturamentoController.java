@@ -33,8 +33,9 @@ public class FaturamentoController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Faturamento>> listar() {
-        return ResponseEntity.ok(comissaoService.listarFaturamentos());
+    public ResponseEntity<List<Faturamento>> listar(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+        return ResponseEntity.ok(comissaoService.listarFaturamentos(usuario != null ? usuario.getEmpresa() : null));
     }
 
     @Getter

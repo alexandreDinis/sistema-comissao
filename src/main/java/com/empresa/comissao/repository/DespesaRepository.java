@@ -15,6 +15,8 @@ import java.util.Optional;
 @Repository
 public interface DespesaRepository extends JpaRepository<Despesa, Long> {
 
+    List<Despesa> findByEmpresa(com.empresa.comissao.domain.entity.Empresa empresa);
+
     List<Despesa> findByDataDespesaBetween(LocalDate start, LocalDate end);
 
     @Query("SELECT SUM(d.valor) FROM Despesa d WHERE d.dataDespesa BETWEEN :start AND :end")

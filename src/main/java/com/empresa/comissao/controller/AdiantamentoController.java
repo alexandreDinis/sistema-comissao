@@ -33,8 +33,9 @@ public class AdiantamentoController {
     }
 
     @GetMapping
-    public ResponseEntity<List<PagamentoAdiantado>> listar() {
-        return ResponseEntity.ok(comissaoService.listarAdiantamentos());
+    public ResponseEntity<List<PagamentoAdiantado>> listar(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+        return ResponseEntity.ok(comissaoService.listarAdiantamentos(usuario != null ? usuario.getEmpresa() : null));
     }
 
     @Getter

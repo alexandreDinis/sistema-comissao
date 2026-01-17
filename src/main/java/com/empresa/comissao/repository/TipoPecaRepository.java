@@ -6,5 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface TipoPecaRepository extends JpaRepository<TipoPeca, Long> {
-    // Basic CRUD is enough for now
+    java.util.List<TipoPeca> findByEmpresa(com.empresa.comissao.domain.entity.Empresa empresa);
 }

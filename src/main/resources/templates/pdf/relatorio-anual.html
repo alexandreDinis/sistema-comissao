@@ -41,8 +41,11 @@
         }
 
         .logo {
-            max-height: 60px;
-            max-width: 200px;
+            width: 150px !important;
+            height: 60px !important;
+            max-width: 150px !important;
+            max-height: 60px !important;
+            object-fit: contain;
         }
 
         .company-info {
@@ -169,7 +172,8 @@
         <table style="width: 100%">
             <tr>
                 <td style="width: 30%">
-                    <img th:if="${empresa['hasLogo']}" th:src="${empresa['logoUrl']}" class="logo" />
+                    <img th:if="${empresa['hasLogo']}" th:src="${empresa['logoUrl']}" class="logo" width="150"
+                        height="60" style="width: 150px !important; height: 60px !important;" />
                     <h2 th:unless="${empresa['hasLogo']}" th:text="${empresa['razaoSocial']}">Empresa</h2>
                 </td>
                 <td style="width: 70%; text-align: right;">

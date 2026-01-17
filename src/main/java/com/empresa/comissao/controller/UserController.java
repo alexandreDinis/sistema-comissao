@@ -46,7 +46,8 @@ public class UserController {
                         u.isActive(),
                         u.getFeatures() != null ? u.getFeatures().stream()
                                 .map(com.empresa.comissao.domain.entity.Feature::getCodigo)
-                                .collect(java.util.stream.Collectors.toSet()) : java.util.Collections.emptySet()))
+                                .collect(java.util.stream.Collectors.toSet()) : java.util.Collections.emptySet(),
+                        u.getEmpresa() != null ? u.getEmpresa().getId() : null))
                 .collect(java.util.stream.Collectors.toList());
 
         return ResponseEntity.ok(response);
@@ -64,7 +65,8 @@ public class UserController {
                 .collect(java.util.stream.Collectors.toSet());
 
         return ResponseEntity
-                .ok(new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive(), featureCodes));
+                .ok(new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive(), featureCodes,
+                        user.getEmpresa() != null ? user.getEmpresa().getId() : null));
     }
 
     @lombok.Data
@@ -75,6 +77,7 @@ public class UserController {
         private Role role;
         private boolean active;
         private java.util.Set<String> features;
+        private Long empresaId;
     }
 
     @PatchMapping("/{id}/approve")
@@ -146,7 +149,8 @@ public class UserController {
                 .collect(java.util.stream.Collectors.toSet());
 
         return ResponseEntity
-                .ok(new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive(), featureCodes));
+                .ok(new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive(), featureCodes,
+                        user.getEmpresa() != null ? user.getEmpresa().getId() : null));
     }
 
     @PatchMapping("/{id}/role")
@@ -199,7 +203,8 @@ public class UserController {
                 .collect(java.util.stream.Collectors.toSet());
 
         return ResponseEntity
-                .ok(new UserResponse(saved.getId(), saved.getEmail(), saved.getRole(), saved.isActive(), featureCodes));
+                .ok(new UserResponse(saved.getId(), saved.getEmail(), saved.getRole(), saved.isActive(), featureCodes,
+                        saved.getEmpresa() != null ? saved.getEmpresa().getId() : null));
     }
 
     @DeleteMapping("/{id}")

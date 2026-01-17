@@ -25,8 +25,11 @@ public class TipoPecaService {
         return tipoPecaRepository.save(tipoPeca);
     }
 
-    public List<TipoPeca> listarTodos() {
-        return tipoPecaRepository.findAll();
+    public List<TipoPeca> listarTodos(com.empresa.comissao.domain.entity.User usuario) {
+        if (usuario != null && usuario.getEmpresa() != null) {
+            return tipoPecaRepository.findByEmpresa(usuario.getEmpresa());
+        }
+        return java.util.Collections.emptyList();
     }
 
     @Transactional
