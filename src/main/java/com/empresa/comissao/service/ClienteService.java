@@ -10,6 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import com.empresa.comissao.domain.entity.User;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +36,8 @@ public class ClienteService {
         Cliente cliente = clienteRepository.findById(id)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Cliente não encontrado"));
 
+        validarAcesso(cliente);
+
         com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
 
         updateEntity(cliente, request);
@@ -41,22 +46,34 @@ public class ClienteService {
     }
 
     public void deletar(Long id) {
-        if (!clienteRepository.existsById(id)) {
-            throw new jakarta.persistence.EntityNotFoundException("Cliente não encontrado");
-        }
-        clienteRepository.deleteById(id);
+        Cliente cliente = clienteRepository.findById(id)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Cliente não encontrado"));
+
+        validarAcesso(cliente);
+
+        clienteRepository.delete(cliente);
     }
 
     public ClienteResponse buscarPorId(Long id) {
-        return clienteRepository.findById(id)
-                .map(this::mapToResponse)
+        Cliente cliente = clienteRepository.findById(id)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Cliente não encontrado"));
+        validarAcesso(cliente);
+        return mapToResponse(cliente);
     }
 
     public List<ClienteResponse> listar(String termo, String cidade, String bairro,
             com.empresa.comissao.domain.enums.StatusCliente status) {
         org.springframework.data.jpa.domain.Specification<Cliente> spec = com.empresa.comissao.repository.specification.ClienteSpecification
                 .comFiltros(termo, cidade, bairro, status);
+
+        User currentUser = getCurrentUser();
+        if (currentUser != null && currentUser.getEmpresa() != null) {
+            spec = spec.and(com.empresa.comissao.repository.specification.ClienteSpecification
+                    .porEmpresa(currentUser.getEmpresa()));
+        } else {
+            // If no tenant context, return empty list to prevent leak
+            return java.util.Collections.emptyList();
+        }
 
         return clienteRepository.findAll(spec).stream()
                 .map(this::mapToResponse)
@@ -106,5 +123,22 @@ public class ClienteService {
                 .estado(c.getEstado())
                 .cep(c.getCep())
                 .build();
+    }
+
+    private User getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof User) {
+            return (User) auth.getPrincipal();
+        }
+        return null;
+    }
+
+    private void validarAcesso(Cliente cliente) {
+        User user = getCurrentUser();
+        if (user != null && user.getEmpresa() != null) {
+            if (cliente.getEmpresa() == null || !cliente.getEmpresa().getId().equals(user.getEmpresa().getId())) {
+                throw new jakarta.persistence.EntityNotFoundException("Cliente não encontrado");
+            }
+        }
     }
 }

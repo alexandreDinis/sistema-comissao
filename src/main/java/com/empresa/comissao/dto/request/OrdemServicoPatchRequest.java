@@ -18,4 +18,7 @@ public class OrdemServicoPatchRequest {
 
     @DecimalMin(value = "0.0", message = "Valor do desconto deve ser positivo")
     private BigDecimal valorDesconto;
+
+    // Payment due date
+    private LocalDate dataVencimento;
 }

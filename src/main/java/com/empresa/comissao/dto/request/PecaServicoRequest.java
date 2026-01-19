@@ -14,4 +14,7 @@ public class PecaServicoRequest {
 
     // Opcional, se nulo usa o valorPadrao do TipoPeca
     private BigDecimal valorCobrado;
+
+    // Observações sobre o serviço (opcional)
+    private String descricao;
 }

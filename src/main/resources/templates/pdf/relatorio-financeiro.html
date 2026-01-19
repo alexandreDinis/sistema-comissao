@@ -156,13 +156,10 @@
         <table style="width: 100%; border: none;">
             <tr style="border: none;">
                 <td style="width: 40%; border: none; padding: 0;">
-                    <img th:if="${empresa['hasLogo']}" th:src="${empresa['logoUrl']}" class="logo" width="120"
-                        height="50" style="width: 120px !important; height: 50px !important;" />
-                    <div th:unless="${empresa['hasLogo']}" class="company-name" th:text="${empresa['razaoSocial']}">
-                        Empresa</div>
+                    <!-- Logo removido -->
                 </td>
                 <td style="width: 60%; text-align: right; border: none; padding: 0;">
-                    <div class="company-name" th:if="${empresa['hasLogo']}" th:text="${empresa['razaoSocial']}">Nome da
+                    <div class="company-name" th:text="${empresa['razaoSocial']}">Nome da
                         Empresa</div>
                     <div class="company-info">
                         <div th:text="${empresa['cnpj']}">CNPJ</div>

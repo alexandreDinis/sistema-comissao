@@ -22,4 +22,8 @@ public class OrdemServicoResponse {
     private BigDecimal valorDesconto;
     private BigDecimal valorTotalSemDesconto;
     private BigDecimal valorTotalComDesconto;
+
+    // Payment due date
+    private LocalDate dataVencimento;
+    private boolean atrasado; // true if status=EM_EXECUCAO and due date is past
 }

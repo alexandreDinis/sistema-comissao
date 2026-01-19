@@ -28,8 +28,9 @@ public class DashboardController {
 
     @GetMapping("/stats")
     @Operation(summary = "Get Dashboard Stats", description = "Returns active OSs, finalized OSs (month), distinct vehicles (month), and total parts (month).")
-    public ResponseEntity<DashboardStatsResponse> getStats() {
-        return ResponseEntity.ok(dashboardService.getStats());
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA', 'USER')")
+    public ResponseEntity<DashboardStatsResponse> getStats(@AuthenticationPrincipal User usuario) {
+        return ResponseEntity.ok(dashboardService.getStats(usuario));
     }
 
     @GetMapping("/yoy/{ano}/{mes}")

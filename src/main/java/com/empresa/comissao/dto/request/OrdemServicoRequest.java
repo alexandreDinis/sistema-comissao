@@ -23,4 +23,7 @@ public class OrdemServicoRequest {
     @DecimalMin(value = "0.0", message = "Valor do desconto deve ser positivo")
     @Max(value = 100, message = "Desconto percentual não pode exceder 100%")
     private BigDecimal valorDesconto;
+
+    // Payment due date (optional - defaults to creation date)
+    private LocalDate dataVencimento;
 }

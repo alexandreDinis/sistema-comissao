@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,7 +25,9 @@ public class OrdemServicoService {
         private final TipoPecaRepository tipoPecaRepository;
         private final VeiculoServicoRepository veiculoRepository;
         private final FaturamentoRepository faturamentoRepository;
+        private final PecaServicoRepository pecaRepository;
         private final ComissaoService comissaoService;
+        private final FinanceiroService financeiroService;
 
         @Transactional
         public OrdemServicoResponse atualizarStatus(Long id,
@@ -33,6 +36,8 @@ public class OrdemServicoService {
 
                 OrdemServico os = osRepository.findById(id)
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+
+                validarAcesso(os);
 
                 if (novoStatus == com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA
                                 && os.getStatus() != com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA) {
@@ -52,6 +57,24 @@ public class OrdemServicoService {
                         faturamentoRepository.save(faturamento);
                         log.info("✅ Faturamento gerado com sucesso para OS ID: {}", id);
 
+                        // Criar Conta a Receber automaticamente como PENDENTE
+                        // Cliente precisa pagar para comissão ser computada
+                        try {
+                                // Data de vencimento: usar a da OS ou padrão 30 dias
+                                java.time.LocalDate vencimento = os.getDataVencimento() != null
+                                                ? os.getDataVencimento()
+                                                : java.time.LocalDate.now().plusDays(30);
+
+                                financeiroService.criarContaReceberDeFaturamento(
+                                                faturamento,
+                                                vencimento,
+                                                false, // PENDENTE - aguarda recebimento
+                                                null); // Meio de pagamento definido ao receber
+                                log.info("💰 ContaReceber PENDENTE criada para OS ID: {}", id);
+                        } catch (Exception e) {
+                                log.warn("⚠️ Erro ao criar ContaReceber: {}", e.getMessage());
+                        }
+
                         if (os.getUsuario() != null) {
                                 comissaoService.invalidarCache(os.getUsuario(),
                                                 java.time.YearMonth.from(faturamento.getDataFaturamento()));
@@ -68,6 +91,8 @@ public class OrdemServicoService {
                         com.empresa.comissao.dto.request.OrdemServicoPatchRequest request) {
                 OrdemServico os = osRepository.findById(id)
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+
+                validarAcesso(os);
 
                 // Validation similar to create
                 if (request.getTipoDesconto() != null && request.getValorDesconto() != null) {
@@ -112,6 +137,8 @@ public class OrdemServicoService {
                 OrdemServico os = osRepository.findById(id)
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
 
+                validarAcesso(os);
+
                 if (os.getStatus() == com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA) {
                         throw new IllegalStateException("Não é possível cancelar uma OS finalizada");
                 }
@@ -147,6 +174,8 @@ public class OrdemServicoService {
                 OrdemServico os = OrdemServico.builder()
                                 .cliente(cliente)
                                 .data(request.getData())
+                                .dataVencimento(request.getDataVencimento() != null ? request.getDataVencimento()
+                                                : request.getData())
                                 .valorTotal(BigDecimal.ZERO)
                                 .tipoDesconto(request.getTipoDesconto())
                                 .valorDesconto(request.getValorDesconto())
@@ -162,6 +191,8 @@ public class OrdemServicoService {
         public OrdemServicoResponse adicionarVeiculo(VeiculoRequest request) {
                 OrdemServico os = osRepository.findById(request.getOrdemServicoId())
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+
+                validarAcesso(os);
 
                 // Validar e Normalizar placa
                 String placaNormalizada = com.empresa.comissao.validation.ValidadorPlaca.normalizar(request.getPlaca());
@@ -185,6 +216,8 @@ public class OrdemServicoService {
                 VeiculoServico veiculo = veiculoRepository.findById(request.getVeiculoId())
                                 .orElseThrow(() -> new EntityNotFoundException("Veículo não encontrado"));
 
+                validarAcesso(veiculo.getOrdemServico());
+
                 TipoPeca tipoPeca = tipoPecaRepository.findById(request.getTipoPecaId())
                                 .orElseThrow(() -> new EntityNotFoundException("Peça não encontrada no catálogo"));
 
@@ -195,6 +228,7 @@ public class OrdemServicoService {
                                 .veiculo(veiculo)
                                 .tipoPeca(tipoPeca)
                                 .valor(valorFinal)
+                                .descricao(request.getDescricao())
                                 .build();
 
                 // Add to vehicle list
@@ -215,15 +249,48 @@ public class OrdemServicoService {
                 return mapToResponse(veiculo.getOrdemServico());
         }
 
+        @Transactional
+        public OrdemServicoResponse removerPeca(Long pecaId) {
+                PecaServico peca = pecaRepository.findById(pecaId)
+                                .orElseThrow(() -> new EntityNotFoundException("Peça/Serviço não encontrado"));
+
+                VeiculoServico veiculo = peca.getVeiculo();
+                OrdemServico os = veiculo.getOrdemServico();
+
+                validarAcesso(os);
+
+                // Verificar se a OS não está finalizada
+                if (os.getStatus() == com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA) {
+                        throw new IllegalStateException("Não é possível remover peças de uma OS finalizada");
+                }
+
+                // Remover a peça do veículo
+                veiculo.getPecas().remove(peca);
+
+                // Deletar a peça
+                pecaRepository.delete(peca);
+
+                // Recalcular totais
+                veiculo.recalcularTotal();
+                osRepository.save(os);
+
+                log.info("🗑️ Peça ID {} removida da OS ID {}", pecaId, os.getId());
+
+                return mapToResponse(os);
+        }
+
         public OrdemServicoResponse buscarPorId(Long id) {
                 OrdemServico os = osRepository.findById(id)
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+                validarAcesso(os);
                 return mapToResponse(os);
         }
 
         public OrdemServico buscarEntidadePorId(Long id) {
-                return osRepository.findById(id)
+                OrdemServico os = osRepository.findById(id)
                                 .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+                validarAcesso(os);
+                return os;
         }
 
         public java.util.List<OrdemServicoResponse> listarTodas() {
@@ -247,9 +314,16 @@ public class OrdemServicoService {
         }
 
         private OrdemServicoResponse mapToResponse(OrdemServico os) {
+                // Calculate if overdue: status=EM_EXECUCAO and due date past today
+                boolean atrasado = os.getStatus() == com.empresa.comissao.domain.enums.StatusOrdemServico.EM_EXECUCAO
+                                && os.getDataVencimento() != null
+                                && os.getDataVencimento().isBefore(LocalDate.now());
+
                 return OrdemServicoResponse.builder()
                                 .id(os.getId())
                                 .data(os.getData())
+                                .dataVencimento(os.getDataVencimento())
+                                .atrasado(atrasado)
                                 .status(os.getStatus())
                                 .valorTotal(os.getValorTotal())
                                 .tipoDesconto(os.getTipoDesconto())
@@ -278,7 +352,23 @@ public class OrdemServicoService {
                                                 .id(p.getId())
                                                 .nomePeca(p.getTipoPeca().getNome())
                                                 .valorCobrado(p.getValor())
+                                                .descricao(p.getDescricao())
                                                 .build()).collect(Collectors.toList()))
                                 .build();
+        }
+
+        private void validarAcesso(OrdemServico os) {
+                org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+                                .getContext().getAuthentication();
+                if (auth != null && auth.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
+                        com.empresa.comissao.domain.entity.User user = (com.empresa.comissao.domain.entity.User) auth
+                                        .getPrincipal(); // fixed indentation
+                        if (user.getEmpresa() != null) {
+                                if (os.getEmpresa() == null
+                                                || !os.getEmpresa().getId().equals(user.getEmpresa().getId())) {
+                                        throw new EntityNotFoundException("OS não encontrada");
+                                }
+                        }
+                }
         }
 }

@@ -30,7 +30,7 @@ public class RelatorioController {
 
         @GetMapping("/{ano}/{mes}")
         @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
-        @Operation(summary = "Gerar relatório financeiro mensal", description = "Retorna um resumo contendo despesas por categoria, imposto (6%) e comissão a pagar.")
+        @Operation(summary = "Gerar relatório financeiro mensal", description = "Retorna um resumo contendo despesas por categoria, imposto (alíquota configurável por empresa) e comissão a pagar.")
         public ResponseEntity<RelatorioFinanceiroDTO> gerarRelatorio(
                         @PathVariable int ano,
                         @PathVariable int mes,
@@ -112,5 +112,23 @@ public class RelatorioController {
                                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                                                 "attachment; filename=relatorio-anual-" + ano + ".pdf")
                                 .body(pdfBytes);
+        }
+
+        @GetMapping(value = "/ranking-clientes")
+        @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+        @Operation(summary = "Ranking de Clientes", description = "Retorna ranking de clientes por faturamento e quantidade de OSs")
+        public ResponseEntity<java.util.List<com.empresa.comissao.dto.response.RankingClienteDTO>> getRankingClientes(
+                        @org.springframework.web.bind.annotation.RequestParam int ano,
+                        @org.springframework.web.bind.annotation.RequestParam(required = false) Integer mes,
+                        @AuthenticationPrincipal User usuario) {
+
+                // Fetch fresh empresa
+                Empresa empresaFresh = null;
+                if (usuario != null && usuario.getEmpresa() != null) {
+                        empresaFresh = empresaRepository.findById(usuario.getEmpresa().getId())
+                                        .orElse(usuario.getEmpresa());
+                }
+
+                return ResponseEntity.ok(comissaoService.gerarRankingClientes(ano, mes, usuario, empresaFresh));
         }
 }

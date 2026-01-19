@@ -27,6 +27,7 @@ public class VeiculoServico {
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "ordem_servico_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private OrdemServico ordemServico;
 
     // Persisted total for performance

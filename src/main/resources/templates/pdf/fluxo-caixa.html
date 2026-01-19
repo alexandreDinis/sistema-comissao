@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8" />
+    <style>
+        * {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background: white;
+            font-size: 10pt;
+            color: #333;
+        }
+
+        .header {
+            display: flex;
+            border-bottom: 3px solid #d4af37;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .logo-container {
+            width: 100px;
+            height: 100px;
+            margin-right: 20px;
+        }
+
+        .logo-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .empresa-info h1 {
+            color: #d4af37;
+            font-size: 18pt;
+            margin: 0 0 5px 0;
+        }
+
+        .empresa-info p {
+            margin: 2px 0;
+            color: #666;
+            font-size: 9pt;
+        }
+
+        .title-section {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #d4af37;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .title-section h2 {
+            margin: 0;
+            font-size: 16pt;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .title-section p {
+            margin: 10px 0 0;
+            font-size: 12pt;
+            color: #fff;
+        }
+
+        .summary-cards {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            border: 2px solid #d4af37;
+            padding: 20px;
+            width: 30%;
+            text-align: center;
+        }
+
+        .card.entradas {
+            border-color: #28a745;
+        }
+
+        .card.saidas {
+            border-color: #dc3545;
+        }
+
+        .card.saldo {
+            border-color: #d4af37;
+            background: #fffbf0;
+        }
+
+        .card h3 {
+            margin: 0 0 10px;
+            font-size: 10pt;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card .value {
+            font-size: 18pt;
+            font-weight: bold;
+        }
+
+        .card.entradas .value {
+            color: #28a745;
+        }
+
+        .card.saidas .value {
+            color: #dc3545;
+        }
+
+        .card.saldo .value {
+            color: #d4af37;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 8pt;
+            color: #999;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #d4af37;
+            padding: 15px;
+            margin-top: 30px;
+        }
+
+        .info-box h4 {
+            margin: 0 0 10px;
+            color: #333;
+        }
+
+        .info-box p {
+            margin: 5px 0;
+            font-size: 9pt;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header with Logo -->
+    <div class="header">
+        <div class="logo-container" th:if="${empresa.hasLogo}">
+            <img th:src="${empresa.logoUrl}" alt="Logo" />
+        </div>
+        <div class="empresa-info">
+            <h1 th:text="${empresa.razaoSocial}">Empresa</h1>
+            <p th:if="${empresa.cnpj}" th:text="'CNPJ: ' + ${empresa.cnpj}"></p>
+            <p th:if="${empresa.endereco}" th:text="${empresa.endereco}"></p>
+            <p th:if="${empresa.telefone}" th:text="'Tel: ' + ${empresa.telefone}"></p>
+        </div>
+    </div>
+
+    <!-- Title -->
+    <div class="title-section">
+        <h2>Fluxo de Caixa</h2>
+        <p th:text="${periodo}">Janeiro 2026</p>
+    </div>
+
+    <!-- Summary Cards -->
+    <table style="width: 100%; margin-bottom: 30px;">
+        <tr>
+            <td style="width: 33%; padding: 10px;">
+                <div class="card entradas">
+                    <h3>Total de Entradas</h3>
+                    <div class="value" th:text="'R$ ' + ${#numbers.formatDecimal(entradas, 1, 'POINT', 2, 'COMMA')}">R$
+                        0,00</div>
+                </div>
+            </td>
+            <td style="width: 33%; padding: 10px;">
+                <div class="card saidas">
+                    <h3>Total de Saídas</h3>
+                    <div class="value" th:text="'R$ ' + ${#numbers.formatDecimal(saidas, 1, 'POINT', 2, 'COMMA')}">R$
+                        0,00</div>
+                </div>
+            </td>
+            <td style="width: 33%; padding: 10px;">
+                <div class="card saldo">
+                    <h3>Saldo do Período</h3>
+                    <div class="value" th:text="'R$ ' + ${#numbers.formatDecimal(saldo, 1, 'POINT', 2, 'COMMA')}">R$
+                        0,00</div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Info Box -->
+    <div class="info-box">
+        <h4>📊 Informações do Relatório</h4>
+        <p><strong>Base de Cálculo:</strong> Recebimentos e pagamentos efetivos no período.</p>
+        <p><strong>Entradas:</strong> Soma de todos os recebimentos (Contas a Receber pagas).</p>
+        <p><strong>Saídas:</strong> Soma de todos os pagamentos (Contas a Pagar quitadas).</p>
+        <p th:text="'Gerado em: ' + ${#temporals.format(dataGeracao, 'dd/MM/yyyy HH:mm')}"></p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Documento gerado automaticamente pelo sistema. Sujeito a auditoria.</p>
+    </div>
+
+</body>
+
+</html>

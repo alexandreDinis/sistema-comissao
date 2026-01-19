@@ -221,13 +221,10 @@
         <table style="width: 100%; border: none;">
             <tr style="border: none;">
                 <td style="width: 40%; border: none; padding: 0;">
-                    <img th:if="${empresa['hasLogo']}" th:src="${empresa['logoUrl']}" class="logo" width="120"
-                        height="50" style="width: 120px !important; height: 50px !important;" />
-                    <div th:unless="${empresa['hasLogo']}" class="company-name" th:text="${empresa['razaoSocial']}">
-                        Empresa</div>
+                    <!-- Logo removido -->
                 </td>
                 <td style="width: 60%; text-align: right; border: none; padding: 0;">
-                    <div class="company-name" th:if="${empresa['hasLogo']}" th:text="${empresa['razaoSocial']}">Nome da
+                    <div class="company-name" th:text="${empresa['razaoSocial']}">Nome da
                         Empresa</div>
                     <div class="company-info">
                         <div th:text="${empresa['cnpj']}">CNPJ</div>
@@ -243,11 +240,10 @@
         </table>
     </div>
 
-    <!-- Título da OS com Status -->
+    <!-- Título da OS -->
     <div class="os-title">
         <h1>ORDEM DE SERVIÇO</h1>
         <div class="os-number" th:text="'Nº ' + ${os.id}">Nº 1</div>
-        <div th:class="'status-badge status-' + ${os.status}" th:text="${statusDescricao}">Status</div>
         <div style="font-size: 9pt; color: #666; margin-top: 8px;">
             Data: <span th:text="${#temporals.format(os.data, 'dd/MM/yyyy')}">01/01/2026</span>
         </div>
@@ -297,19 +293,22 @@
                     </th>
                 </tr>
                 <tr>
-                    <th style="width: 50%;">Serviço/Peça</th>
-                    <th style="width: 25%;">Tipo</th>
-                    <th style="width: 25%;" class="text-right">Valor</th>
+                    <th style="width: 70%;">Serviço/Peça</th>
+                    <th style="width: 30%;" class="text-right">Valor</th>
                 </tr>
             </thead>
             <tbody>
                 <tr th:each="peca : ${veiculo.pecas}">
-                    <td th:text="${peca.descricao}">Serviço Exemplo</td>
-                    <td th:text="${peca.tipoPeca?.nome}">Tipo</td>
+                    <td>
+                        <span th:text="${peca.tipoPeca?.nome}">Serviço Exemplo</span>
+                        <div th:if="${peca.descricao}"
+                            style="font-size: 8pt; color: #666; font-style: italic; margin-top: 2px;"
+                            th:text="${peca.descricao}"></div>
+                    </td>
                     <td class="text-right" th:text="${#numbers.formatCurrency(peca.valor)}">R$ 0,00</td>
                 </tr>
                 <tr class="subtotal-row">
-                    <td colspan="2">Subtotal do Veículo</td>
+                    <td>Subtotal do Veículo</td>
                     <td class="text-right" th:text="${#numbers.formatCurrency(veiculo.valorTotal)}">R$ 0,00</td>
                 </tr>
             </tbody>
@@ -318,20 +317,23 @@
 
     <!-- Totais -->
     <div class="total-box">
-        <div class="total-row">
-            <span class="total-label">Subtotal (sem desconto)</span>
-            <span class="total-value" th:text="${#numbers.formatCurrency(os.valorTotalSemDesconto)}">R$ 0,00</span>
-        </div>
+        <!-- Só mostra subtotal e desconto se houver desconto aplicado -->
+        <th:block th:if="${os.valorDesconto != null and os.valorDesconto > 0}">
+            <div class="total-row">
+                <span class="total-label">Subtotal</span>
+                <span class="total-value" th:text="${#numbers.formatCurrency(os.valorTotalSemDesconto)}">R$ 0,00</span>
+            </div>
 
-        <div class="total-row discount-row" th:if="${os.valorDesconto != null and os.valorDesconto > 0}">
-            <span class="total-label">
-                Desconto
-                <span th:if="${os.tipoDesconto?.name() == 'PERCENTUAL'}"
-                    th:text="'(' + ${os.valorDesconto} + '%)'"></span>
-                <span th:if="${os.tipoDesconto?.name() == 'VALOR_FIXO'}">(Valor Fixo)</span>
-            </span>
-            <span class="total-value" th:text="'-' + ${#numbers.formatCurrency(descontoCalculado)}">- R$ 0,00</span>
-        </div>
+            <div class="total-row discount-row">
+                <span class="total-label">
+                    Desconto
+                    <span th:if="${os.tipoDesconto?.name() == 'PERCENTUAL'}"
+                        th:text="'(' + ${os.valorDesconto} + '%)')"></span>
+                    <span th:if="${os.tipoDesconto?.name() == 'VALOR_FIXO'}">(Valor Fixo)</span>
+                </span>
+                <span class="total-value" th:text="'-' + ${#numbers.formatCurrency(descontoCalculado)}">- R$ 0,00</span>
+            </div>
+        </th:block>
 
         <div class="total-row total-final">
             <span class="total-label">VALOR TOTAL</span>

@@ -5,8 +5,6 @@ import com.empresa.comissao.domain.entity.Despesa;
 import com.empresa.comissao.domain.entity.Faturamento;
 import com.empresa.comissao.domain.entity.PagamentoAdiantado;
 import com.empresa.comissao.domain.enums.CategoriaDespesa;
-import com.empresa.comissao.domain.model.FaixaComissao;
-import com.empresa.comissao.domain.model.TabelaComissao;
 import com.empresa.comissao.dto.RelatorioFinanceiroDTO;
 import com.empresa.comissao.dto.ComparacaoFaturamentoDTO;
 import com.empresa.comissao.dto.MesFaturamentoDTO;
@@ -15,6 +13,10 @@ import com.empresa.comissao.repository.ComissaoCalculadaRepository;
 import com.empresa.comissao.repository.DespesaRepository;
 import com.empresa.comissao.repository.FaturamentoRepository;
 import com.empresa.comissao.repository.PagamentoAdiantadoRepository;
+import com.empresa.comissao.repository.RegraComissaoRepository;
+import com.empresa.comissao.domain.entity.RegraComissao;
+import com.empresa.comissao.domain.entity.FaixaComissaoConfig;
+import com.empresa.comissao.domain.enums.TipoRegraComissao;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,9 @@ public class ComissaoService {
         private final PagamentoAdiantadoRepository pagamentoAdiantadoRepository;
         private final ComissaoCalculadaRepository comissaoCalculadaRepository;
         private final DespesaRepository despesaRepository;
+        private final com.empresa.comissao.repository.OrdemServicoRepository ordemServicoRepository;
+        private final RegraComissaoRepository regraComissaoRepository;
+        private final com.empresa.comissao.repository.ContaReceberRepository contaReceberRepository;
 
         @Transactional
         public ComissaoCalculada calcularEObterComissaoMensal(int ano, int mes,
@@ -64,24 +69,43 @@ public class ComissaoService {
                         return comissaoExistente.get();
                 }
 
-                log.info("📊 Comissão não encontrada. Calculando...");
+                log.info("📊 Comissão não encontrada. Calculando...\n");
 
-                // 2. Somar o faturamento total do mês (Filtrando por usuário se informado)
+                // 2a. Buscar saldo do mês anterior (CARRYOVER)
+                YearMonth mesAnterior = anoMesReferencia.minusMonths(1);
+                BigDecimal saldoAnterior = BigDecimal.ZERO;
+                Optional<ComissaoCalculada> comissaoMesAnterior = comissaoCalculadaRepository
+                                .findFirstByAnoMesReferenciaAndUsuario(mesAnterior, usuario);
+                if (comissaoMesAnterior.isPresent()) {
+                        BigDecimal saldoMesAnterior = comissaoMesAnterior.get().getSaldoAReceber();
+                        // Se o saldo do mês anterior é negativo, transferimos como dívida
+                        if (saldoMesAnterior.compareTo(BigDecimal.ZERO) < 0) {
+                                saldoAnterior = saldoMesAnterior; // Valor negativo (dívida)
+                                log.info("⚠️ Saldo anterior negativo (carryover): {}", saldoAnterior);
+                        }
+                }
+
+                // 2. Somar o RECEBIDO total do mês (ContaReceber.PAGO - base para comissão)
+                // MUDANÇA CRÍTICA: Comissão agora é baseada em CAIXA, não COMPETÊNCIA
                 LocalDate inicioDoMes = anoMesReferencia.atDay(1);
                 LocalDate fimDoMes = anoMesReferencia.atEndOfMonth();
 
                 BigDecimal faturamentoMensalTotal;
-                if (usuario != null) {
-                        faturamentoMensalTotal = faturamentoRepository
-                                        .sumValorByDataFaturamentoBetweenAndUsuario(inicioDoMes, fimDoMes, usuario)
-                                        .orElse(BigDecimal.ZERO);
+                if (usuario != null && usuario.getEmpresa() != null) {
+                        // Buscar recebimentos PAGOS por funcionário (regime de caixa)
+                        faturamentoMensalTotal = contaReceberRepository
+                                        .sumByRecebimentoBetweenAndFuncionario(
+                                                        usuario.getEmpresa(), usuario, inicioDoMes, fimDoMes);
+                        log.info("💰 Recebido (caixa) por funcionário: {}", faturamentoMensalTotal);
                 } else {
+                        // Fallback: usar faturamento tradicional se não houver empresa
                         faturamentoMensalTotal = faturamentoRepository
                                         .sumValorByDataFaturamentoBetween(inicioDoMes, fimDoMes)
                                         .orElse(BigDecimal.ZERO);
+                        log.info("💰 Faturamento (fallback): {}", faturamentoMensalTotal);
                 }
 
-                log.info("💰 Faturamento total: {}", faturamentoMensalTotal);
+                log.info("💵 Base para comissão (recebido): {}", faturamentoMensalTotal);
 
                 // 3. Somar os adiantamentos totais do mês
                 BigDecimal valorTotalAdiantamentos;
@@ -97,33 +121,88 @@ public class ComissaoService {
 
                 log.info("💸 Adiantamentos total: {}", valorTotalAdiantamentos);
 
-                // 4. Determinar a faixa de comissão
-                FaixaComissao faixa = TabelaComissao.getFaixaByFaturamento(faturamentoMensalTotal);
+                // 4. Determinar a faixa e calcular comissão
+                BigDecimal percentualAplicado = BigDecimal.ZERO;
+                String faixaDescricao = "Sem comissão definida";
 
-                log.info("📈 Faixa encontrada: {} - {}%", faixa.getDescricao(), faixa.getPorcentagem());
+                boolean regraEncontrada = false;
+
+                // Tentar Regra Dinâmica (Prioridade)
+                if (usuario != null && usuario.getEmpresa() != null) {
+                        Optional<RegraComissao> regraOpt = regraComissaoRepository
+                                        .findActiveWithFaixasByEmpresa(usuario.getEmpresa());
+
+                        if (regraOpt.isPresent()) {
+                                RegraComissao regra = regraOpt.get();
+                                regraEncontrada = true;
+                                log.info("📏 Regra dinâmica aplicada: {}", regra.getNome());
+
+                                if (regra.getTipoRegra() == TipoRegraComissao.FIXA_EMPRESA) {
+                                        percentualAplicado = regra.getPercentualFixo() != null
+                                                        ? regra.getPercentualFixo().divide(new BigDecimal("100"), 4,
+                                                                        RoundingMode.HALF_UP)
+                                                        : BigDecimal.ZERO;
+                                        faixaDescricao = "Fixa: " + regra.getNome();
+                                } else {
+                                        // Percorrer faixas
+                                        if (regra.getFaixas() != null) {
+                                                for (FaixaComissaoConfig fc : regra.getFaixas()) {
+                                                        boolean maiorIgualMin = faturamentoMensalTotal
+                                                                        .compareTo(fc.getMinFaturamento()) >= 0;
+                                                        boolean menorIgualMax = fc.getMaxFaturamento() == null
+                                                                        || faturamentoMensalTotal.compareTo(
+                                                                                        fc.getMaxFaturamento()) <= 0;
+
+                                                        if (maiorIgualMin && menorIgualMax) {
+                                                                percentualAplicado = fc.getPorcentagem() != null
+                                                                                ? fc.getPorcentagem().divide(
+                                                                                                new BigDecimal("100"),
+                                                                                                4, RoundingMode.HALF_UP)
+                                                                                : BigDecimal.ZERO;
+                                                                faixaDescricao = fc.getDescricao();
+                                                                break;
+                                                        }
+                                                }
+                                        }
+                                }
+                        }
+                }
+
+                // Fallback Legacy (Tabela Estática)
+                if (!regraEncontrada) {
+                        log.warn("⚠️ Nenhuma regra de comissão ativa encontrada para usuário {}",
+                                        usuario != null ? usuario.getUsername() : "N/A");
+                        percentualAplicado = BigDecimal.ZERO;
+                        faixaDescricao = "Nenhuma regra de comissão configurada";
+                }
+
+                log.info("📈 Percentual aplicado: {} ({})", percentualAplicado, faixaDescricao);
 
                 // 5. Calcular o valor bruto da comissão
-                BigDecimal valorBrutoComissao = faturamentoMensalTotal.multiply(faixa.getPorcentagem())
+                BigDecimal valorBrutoComissao = faturamentoMensalTotal.multiply(percentualAplicado)
                                 .setScale(2, RoundingMode.HALF_UP);
 
                 log.info("💵 Valor bruto da comissão: {}", valorBrutoComissao);
 
-                // 6. Calcular o saldo a receber
+                // 6. Calcular o saldo a receber (incluindo carryover)
+                // Fórmula: valorBruto - adiantamentos + saldoAnterior (saldoAnterior pode ser
+                // negativo)
                 BigDecimal saldoAReceber = valorBrutoComissao.subtract(valorTotalAdiantamentos)
+                                .add(saldoAnterior) // Inclui carryover (se negativo, diminui o saldo)
                                 .setScale(2, RoundingMode.HALF_UP);
 
-                log.info("✅ Saldo a receber: {}", saldoAReceber);
+                log.info("✅ Saldo a receber (com carryover): {}", saldoAReceber);
 
                 // 7. Criar e persistir o objeto ComissaoCalculada
                 ComissaoCalculada novaComissao = ComissaoCalculada.builder()
                                 .anoMesReferencia(anoMesReferencia)
                                 .faturamentoMensalTotal(faturamentoMensalTotal)
-                                .faixaComissaoDescricao(faixa.getDescricao())
-                                .porcentagemComissaoAplicada(faixa.getPorcentagem().multiply(new BigDecimal("100")))
+                                .faixaComissaoDescricao(faixaDescricao)
+                                .porcentagemComissaoAplicada(percentualAplicado.multiply(new BigDecimal("100")))
                                 .valorBrutoComissao(valorBrutoComissao)
                                 .valorTotalAdiantamentos(valorTotalAdiantamentos)
                                 .saldoAReceber(saldoAReceber)
-                                .saldoAReceber(saldoAReceber)
+                                .saldoAnterior(saldoAnterior) // NOVO: Saldo do mês anterior (carryover)
                                 .usuario(usuario)
                                 .empresa(usuario != null ? usuario.getEmpresa() : null) // Bind business data to tenant
                                 .build();
@@ -168,15 +247,29 @@ public class ComissaoService {
 
                 log.info("📊 Comissão empresa não encontrada. Calculando...");
 
-                // 2. Sum all faturamento for the empresa
+                // 2a. Buscar saldo do mês anterior (CARRYOVER) para empresa
+                YearMonth mesAnterior = anoMesReferencia.minusMonths(1);
+                BigDecimal saldoAnterior = BigDecimal.ZERO;
+                Optional<ComissaoCalculada> comissaoMesAnterior = comissaoCalculadaRepository
+                                .findFirstByAnoMesReferenciaAndEmpresaAndUsuarioIsNull(mesAnterior, empresa);
+                if (comissaoMesAnterior.isPresent()) {
+                        BigDecimal saldoMesAnterior = comissaoMesAnterior.get().getSaldoAReceber();
+                        // Se o saldo do mês anterior é negativo, transferimos como dívida
+                        if (saldoMesAnterior.compareTo(BigDecimal.ZERO) < 0) {
+                                saldoAnterior = saldoMesAnterior; // Valor negativo (dívida)
+                                log.info("⚠️ Saldo anterior negativo (carryover empresa): {}", saldoAnterior);
+                        }
+                }
+
+                // 2. Somar o RECEBIDO total do mês para a empresa (ContaReceber.PAGO)
+                // MUDANÇA CRÍTICA: Comissão empresa agora baseada em CAIXA
                 LocalDate inicioDoMes = anoMesReferencia.atDay(1);
                 LocalDate fimDoMes = anoMesReferencia.atEndOfMonth();
 
-                BigDecimal faturamentoMensalTotal = faturamentoRepository
-                                .sumValorByDataFaturamentoBetweenAndEmpresa(inicioDoMes, fimDoMes, empresa)
-                                .orElse(BigDecimal.ZERO);
+                BigDecimal faturamentoMensalTotal = contaReceberRepository
+                                .sumByRecebimentoBetween(empresa, inicioDoMes, fimDoMes);
 
-                log.info("💰 Faturamento total da empresa: {}", faturamentoMensalTotal);
+                log.info("💰 Recebido total da empresa (caixa): {}", faturamentoMensalTotal);
 
                 // 3. Sum all adiantamentos for the empresa
                 BigDecimal valorTotalAdiantamentos = pagamentoAdiantadoRepository
@@ -186,28 +279,73 @@ public class ComissaoService {
                 log.info("💸 Adiantamentos total da empresa: {}", valorTotalAdiantamentos);
 
                 // 4. Calculate commission
-                com.empresa.comissao.domain.model.FaixaComissao faixa = com.empresa.comissao.domain.model.TabelaComissao
-                                .getFaixaByFaturamento(faturamentoMensalTotal);
+                BigDecimal percentualAplicado = BigDecimal.ZERO;
+                String faixaDescricao = "Sem comissão definida";
+                boolean regraEncontrada = false;
 
-                log.info("📈 Faixa encontrada: {} - {}%", faixa.getDescricao(), faixa.getPorcentagem());
+                // Try Dynamic Rule
+                Optional<RegraComissao> regraOpt = regraComissaoRepository.findActiveWithFaixasByEmpresa(empresa);
+                if (regraOpt.isPresent()) {
+                        RegraComissao regra = regraOpt.get();
+                        regraEncontrada = true;
+                        if (regra.getTipoRegra() == TipoRegraComissao.FIXA_EMPRESA) {
+                                percentualAplicado = regra.getPercentualFixo() != null
+                                                ? regra.getPercentualFixo().divide(new BigDecimal("100"), 4,
+                                                                RoundingMode.HALF_UP)
+                                                : BigDecimal.ZERO;
+                                faixaDescricao = "Fixa: " + regra.getNome();
+                        } else {
+                                if (regra.getFaixas() != null) {
+                                        for (FaixaComissaoConfig fc : regra.getFaixas()) {
+                                                boolean maiorIgualMin = faturamentoMensalTotal
+                                                                .compareTo(fc.getMinFaturamento()) >= 0;
+                                                boolean menorIgualMax = fc.getMaxFaturamento() == null
+                                                                || faturamentoMensalTotal
+                                                                                .compareTo(fc.getMaxFaturamento()) <= 0;
+                                                if (maiorIgualMin && menorIgualMax) {
+                                                        percentualAplicado = fc.getPorcentagem() != null
+                                                                        ? fc.getPorcentagem().divide(
+                                                                                        new BigDecimal("100"), 4,
+                                                                                        RoundingMode.HALF_UP)
+                                                                        : BigDecimal.ZERO;
+                                                        faixaDescricao = fc.getDescricao();
+                                                        break;
+                                                }
+                                        }
+                                }
+                        }
+                }
 
-                BigDecimal valorBrutoComissao = faturamentoMensalTotal.multiply(faixa.getPorcentagem())
+                // Fallback Legacy
+                if (!regraEncontrada) {
+                        log.warn("⚠️ Nenhuma regra de comissão ativa encontrada para empresa {}",
+                                        empresa.getNome());
+                        percentualAplicado = BigDecimal.ZERO;
+                        faixaDescricao = "Nenhuma regra de comissão configurada";
+                }
+
+                log.info("📈 Faixa encontrada: {} - {}%", faixaDescricao, percentualAplicado);
+
+                BigDecimal valorBrutoComissao = faturamentoMensalTotal.multiply(percentualAplicado)
                                 .setScale(2, java.math.RoundingMode.HALF_UP);
 
+                // Incluir carryover no saldo a receber
                 BigDecimal saldoAReceber = valorBrutoComissao.subtract(valorTotalAdiantamentos)
+                                .add(saldoAnterior) // Inclui carryover (se negativo, diminui o saldo)
                                 .setScale(2, java.math.RoundingMode.HALF_UP);
 
-                log.info("✅ Saldo a receber da empresa: {}", saldoAReceber);
+                log.info("✅ Saldo a receber da empresa (com carryover): {}", saldoAReceber);
 
                 // 5. Save company-wide commission (no usuario, only empresa)
                 ComissaoCalculada novaComissao = ComissaoCalculada.builder()
                                 .anoMesReferencia(anoMesReferencia)
                                 .faturamentoMensalTotal(faturamentoMensalTotal)
-                                .faixaComissaoDescricao(faixa.getDescricao())
-                                .porcentagemComissaoAplicada(faixa.getPorcentagem().multiply(new BigDecimal("100")))
+                                .faixaComissaoDescricao(faixaDescricao)
+                                .porcentagemComissaoAplicada(percentualAplicado.multiply(new BigDecimal("100")))
                                 .valorBrutoComissao(valorBrutoComissao)
                                 .valorTotalAdiantamentos(valorTotalAdiantamentos)
                                 .saldoAReceber(saldoAReceber)
+                                .saldoAnterior(saldoAnterior) // NOVO: Saldo do mês anterior (carryover)
                                 .usuario(null) // No specific user for company-wide report
                                 .empresa(empresa)
                                 .build();
@@ -216,6 +354,31 @@ public class ComissaoService {
                 log.info("💾 Comissão empresa salva com ID: {}", salva.getId());
 
                 return salva;
+        }
+
+        /**
+         * Marca uma comissão como quitada (paga).
+         * Registra a data de quitação para auditoria.
+         */
+        @Transactional
+        public void quitarComissao(Long comissaoId) {
+                log.info("💸 Quitando comissão ID: {}", comissaoId);
+
+                ComissaoCalculada comissao = comissaoCalculadaRepository.findById(comissaoId)
+                                .orElseThrow(() -> new com.empresa.comissao.exception.BusinessException(
+                                                "Comissão não encontrada com ID: " + comissaoId));
+
+                if (comissao.getQuitado() != null && comissao.getQuitado()) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Esta comissão já foi quitada em " + comissao.getDataQuitacao());
+                }
+
+                comissao.setQuitado(true);
+                comissao.setDataQuitacao(java.time.LocalDateTime.now());
+                comissao.setValorQuitado(comissao.getSaldoAReceber());
+
+                comissaoCalculadaRepository.save(comissao);
+                log.info("✅ Comissão {} quitada com sucesso. Valor: {}", comissaoId, comissao.getValorQuitado());
         }
 
         @Transactional
@@ -232,12 +395,20 @@ public class ComissaoService {
 
                 // Also invalidate empresa cache if user has empresa
                 if (usuario != null && usuario.getEmpresa() != null) {
-                        comissaoCalculadaRepository.findByAnoMesReferenciaAndEmpresa(anoMes, usuario.getEmpresa())
-                                        .forEach(comissao -> {
-                                                comissaoCalculadaRepository.delete(comissao);
-                                                log.info("✅ Cache de empresa invalidado com sucesso.");
-                                        });
+                        invalidarCacheEmpresa(usuario.getEmpresa(), anoMes);
                 }
+        }
+
+        @Transactional
+        public void invalidarCacheEmpresa(com.empresa.comissao.domain.entity.Empresa empresa, YearMonth anoMes) {
+                if (empresa == null)
+                        return;
+                log.info("🗑️ Invalidando cache de comissão para Empresa: {} - Mês: {}", empresa.getNome(), anoMes);
+                comissaoCalculadaRepository.findByAnoMesReferenciaAndEmpresa(anoMes, empresa)
+                                .forEach(comissao -> {
+                                        comissaoCalculadaRepository.delete(comissao);
+                                });
+                log.info("✅ Cache de empresa invalidado com sucesso.");
         }
 
         @Transactional
@@ -263,14 +434,15 @@ public class ComissaoService {
         }
 
         @Transactional
-        public PagamentoAdiantado adicionarAdiantamento(LocalDate data, BigDecimal valor,
+        public PagamentoAdiantado adicionarAdiantamento(LocalDate data, BigDecimal valor, String descricao,
                         com.empresa.comissao.domain.entity.User usuario) {
-                log.info("📝 Registrando adiantamento: {} - R$ {} - Usuário: {}", data, valor,
+                log.info("📝 Registrando adiantamento: {} - R$ {} - Desc: {} - Usuário: {}", data, valor, descricao,
                                 usuario != null ? usuario.getEmail() : "GLOBAL");
 
                 PagamentoAdiantado adiantamento = PagamentoAdiantado.builder()
                                 .dataPagamento(data)
                                 .valor(valor)
+                                .descricao(descricao)
                                 .usuario(usuario)
                                 .empresa(usuario != null ? usuario.getEmpresa() : null)
                                 .build();
@@ -304,6 +476,11 @@ public class ComissaoService {
                 return salva;
         }
 
+        @Transactional
+        public Despesa atualizarDespesa(Despesa despesa) {
+                return despesaRepository.save(despesa);
+        }
+
         public RelatorioFinanceiroDTO gerarRelatorioFinanceiro(int ano, int mes,
                         com.empresa.comissao.domain.entity.User usuario,
                         com.empresa.comissao.domain.entity.Empresa empresaFresh) {
@@ -325,11 +502,15 @@ public class ComissaoService {
                 }
                 BigDecimal faturamentoTotal = comissao.getFaturamentoMensalTotal();
 
-                // 2. Calcular Imposto (6% sobre faturamento total)
-                BigDecimal imposto = faturamentoTotal.multiply(new BigDecimal("0.06"))
+                // 2. Calcular Imposto (usar alíquota configurada na empresa, default 6%)
+                BigDecimal aliquota = (empresaFresh != null && empresaFresh.getAliquotaImposto() != null)
+                                ? empresaFresh.getAliquotaImposto()
+                                : new BigDecimal("0.06"); // Fallback: 6% Simples Nacional 1ª faixa
+                BigDecimal imposto = faturamentoTotal.multiply(aliquota)
                                 .setScale(2, RoundingMode.HALF_UP);
 
-                log.info("🏷️ Imposto calculado (6%): {}", imposto);
+                BigDecimal aliquotaPercent = aliquota.multiply(new BigDecimal("100"));
+                log.info("🏷️ Imposto calculado ({}%): {}", aliquotaPercent, imposto);
 
                 // 3. Obter Despesas por Categoria e Total
                 Map<CategoriaDespesa, BigDecimal> despesasPorCategoria = new EnumMap<>(CategoriaDespesa.class);
@@ -588,5 +769,24 @@ public class ComissaoService {
                                 .diferencaAnual(diferencaAnual)
                                 .crescimentoPercentualAnual(crescimentoPercentualAnual)
                                 .build();
+        }
+
+        public List<com.empresa.comissao.dto.response.RankingClienteDTO> gerarRankingClientes(int ano, Integer mes,
+                        com.empresa.comissao.domain.entity.User usuario,
+                        com.empresa.comissao.domain.entity.Empresa empresa) {
+
+                // Determine which empresa to use (Tenant)
+                com.empresa.comissao.domain.entity.Empresa empresaToUse = empresa != null ? empresa
+                                : (usuario != null ? usuario.getEmpresa() : null);
+
+                if (empresaToUse == null) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Empresa é obrigatória para gerar ranking de clientes.");
+                }
+
+                log.info("🏆 Gerando ranking de clientes para empresa: {} - Ano: {} - Mês: {}",
+                                empresaToUse.getNome(), ano, mes != null ? mes : "TODOS");
+
+                return ordemServicoRepository.findRankingClientes(empresaToUse.getId(), ano, mes);
         }
 }

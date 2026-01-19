@@ -29,6 +29,9 @@ public class OrdemServico {
     @Column(nullable = false)
     private LocalDate data;
 
+    @Column(name = "data_vencimento")
+    private LocalDate dataVencimento;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

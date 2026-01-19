@@ -25,4 +25,21 @@ public interface DespesaRepository extends JpaRepository<Despesa, Long> {
     @Query("SELECT d.categoria, SUM(d.valor) FROM Despesa d WHERE d.dataDespesa BETWEEN :start AND :end GROUP BY d.categoria")
     List<Object[]> sumValorByCategoriaAndDataDespesaBetween(@Param("start") LocalDate start,
             @Param("end") LocalDate end);
+
+    // ========================================
+    // CARTÃO DE CRÉDITO
+    // ========================================
+
+    // Soma despesas de um cartão em um período
+    @Query("SELECT COALESCE(SUM(d.valor), 0) FROM Despesa d WHERE d.cartao = :cartao AND d.dataDespesa BETWEEN :inicio AND :fim")
+    BigDecimal sumByCartaoAndPeriodo(
+            @Param("cartao") com.empresa.comissao.domain.entity.CartaoCredito cartao,
+            @Param("inicio") LocalDate inicio,
+            @Param("fim") LocalDate fim);
+
+    // Listar despesas de um cartão em um período
+    List<Despesa> findByCartaoAndDataDespesaBetween(
+            com.empresa.comissao.domain.entity.CartaoCredito cartao,
+            LocalDate inicio,
+            LocalDate fim);
 }

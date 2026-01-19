@@ -34,4 +34,8 @@ public class ClienteSpecification {
             return spec.toPredicate(root, query, criteriaBuilder);
         };
     }
+
+    public static Specification<Cliente> porEmpresa(com.empresa.comissao.domain.entity.Empresa empresa) {
+        return (root, query, cb) -> cb.equal(root.get("empresa"), empresa);
+    }
 }

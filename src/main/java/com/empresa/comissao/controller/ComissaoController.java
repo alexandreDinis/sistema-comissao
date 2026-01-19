@@ -68,8 +68,23 @@ public class ComissaoController {
                 comissao.getPorcentagemComissaoAplicada(),
                 comissao.getValorBrutoComissao(),
                 comissao.getValorTotalAdiantamentos(),
-                comissao.getSaldoAReceber());
+                comissao.getSaldoAReceber(),
+                comissao.getSaldoAnterior(),
+                comissao.getQuitado(),
+                comissao.getDataQuitacao() != null ? comissao.getDataQuitacao().toString() : null);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Endpoint para quitar uma comissão (marcar como paga).
+     * Disponível apenas para ADMIN_EMPRESA.
+     */
+    @PostMapping("/quitar/{id}")
+    @PreAuthorize("hasRole('ADMIN_EMPRESA')")
+    public ResponseEntity<String> quitarComissao(@PathVariable Long id) {
+        log.info("💸 Quitando comissão ID: {}", id);
+        comissaoService.quitarComissao(id);
+        return ResponseEntity.ok("Comissão quitada com sucesso.");
     }
 
     @Getter
@@ -82,5 +97,8 @@ public class ComissaoController {
         private BigDecimal valorBrutoComissao;
         private BigDecimal valorAdiantado;
         private BigDecimal saldoAReceber;
+        private BigDecimal saldoAnterior; // NOVO: Saldo do mês anterior (carryover)
+        private Boolean quitado; // NOVO: Se foi pago
+        private String dataQuitacao; // NOVO: Data do pagamento
     }
 }

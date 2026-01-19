@@ -10,4 +10,5 @@ public class PecaServicoResponse {
     private Long id;
     private String nomePeca; // Nome do TipoPeca
     private BigDecimal valorCobrado;
+    private String descricao;
 }

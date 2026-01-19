@@ -1,6 +1,5 @@
 package com.empresa.comissao.domain.entity;
 
-import com.empresa.comissao.domain.enums.CategoriaDespesa;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -8,44 +7,38 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * Cartão de Crédito Corporativo.
+ * Usado para agrupar despesas em faturas mensais.
+ */
 @Entity
-@Table(name = "despesas")
+@Table(name = "cartoes_credito")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Despesa {
+public class CartaoCredito {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false, length = 100)
+    private String nome;
+
+    @Column(name = "dia_vencimento", nullable = false)
+    private Integer diaVencimento;
+
     @Column(nullable = false)
-    private LocalDate dataDespesa;
-
-    @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal valor;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50)
-    private CategoriaDespesa categoria;
-
-    @Column(length = 255)
-    private String descricao;
+    @Builder.Default
+    private Boolean ativo = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "empresa_id")
+    @JoinColumn(name = "empresa_id", nullable = false)
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cartao_id")
-    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
-    private CartaoCredito cartao;
 
     @Column(name = "data_criacao", nullable = false, updatable = false)
     private LocalDateTime dataCriacao;

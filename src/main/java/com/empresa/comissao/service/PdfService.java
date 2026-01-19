@@ -70,6 +70,31 @@ public class PdfService {
         }
     }
 
+    public byte[] gerarFluxoCaixaPdf(java.time.YearMonth periodo, BigDecimal entradas,
+            BigDecimal saidas, Empresa empresa) {
+        try {
+            Context context = new Context(Locale.of("pt", "BR"));
+            context.setVariable("empresa", prepararDadosEmpresa(empresa));
+            context.setVariable("periodo", periodo.getMonth().getDisplayName(
+                    java.time.format.TextStyle.FULL, Locale.of("pt", "BR")) + " " + periodo.getYear());
+            context.setVariable("entradas", entradas != null ? entradas : BigDecimal.ZERO);
+            context.setVariable("saidas", saidas != null ? saidas : BigDecimal.ZERO);
+            context.setVariable("saldo", (entradas != null ? entradas : BigDecimal.ZERO)
+                    .subtract(saidas != null ? saidas : BigDecimal.ZERO));
+            context.setVariable("dataGeracao", LocalDateTime.now());
+
+            String htmlContent = templateEngine.process("pdf/fluxo-caixa", context);
+            if (htmlContent == null) {
+                throw new RuntimeException("Erro ao processar template: resultado nulo");
+            }
+
+            return htmlToPdf(htmlContent);
+        } catch (Exception e) {
+            log.error("Erro ao gerar PDF do fluxo de caixa", e);
+            throw new RuntimeException("Erro ao gerar PDF", e);
+        }
+    }
+
     public byte[] gerarRelatorioFinanceiroPdf(RelatorioFinanceiroDTO relatorio, Empresa empresa) {
         try {
             // Prepare template context

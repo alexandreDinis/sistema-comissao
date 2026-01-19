@@ -61,6 +61,22 @@ public class ComissaoCalculada {
     @Column(name = "data_atualizacao")
     private LocalDateTime dataAtualizacao;
 
+    // === NOVOS CAMPOS: Saldo Acumulativo e Quitação ===
+
+    @Column(name = "saldo_anterior", precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal saldoAnterior = BigDecimal.ZERO;
+
+    @Column(name = "quitado")
+    @Builder.Default
+    private Boolean quitado = false;
+
+    @Column(name = "data_quitacao")
+    private LocalDateTime dataQuitacao;
+
+    @Column(name = "valor_quitado", precision = 19, scale = 2)
+    private BigDecimal valorQuitado;
+
     @PrePersist
     protected void onCreate() {
         dataCriacao = LocalDateTime.now();

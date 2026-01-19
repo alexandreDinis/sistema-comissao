@@ -25,19 +25,49 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class DespesaController {
 
     private final ComissaoService comissaoService;
+    private final com.empresa.comissao.service.FinanceiroService financeiroService;
+    private final com.empresa.comissao.service.FaturaService faturaService;
+    private final com.empresa.comissao.repository.CartaoCreditoRepository cartaoRepository;
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Registrar uma nova despesa", description = "Adiciona um gasto categorizado ao sistema.")
+    @Operation(summary = "Registrar uma nova despesa", description = "Adiciona um gasto categorizado ao sistema. Se cartão informado, agrupa em fatura.")
     public ResponseEntity<Despesa> criar(
             @Valid @RequestBody DespesaRequestDTO request,
             @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+
+        // 1. Registrar a Despesa
         Despesa salva = comissaoService.adicionarDespesa(
                 request.getDataDespesa(),
                 request.getValor(),
                 request.getCategoria(),
                 request.getDescricao(),
                 usuario);
+
+        // 2. Se tem cartão, usar fluxo de fatura (agrupamento)
+        if (request.getCartaoId() != null) {
+            com.empresa.comissao.domain.entity.CartaoCredito cartao = cartaoRepository.findById(request.getCartaoId())
+                    .orElseThrow(() -> new com.empresa.comissao.exception.BusinessException("Cartão não encontrado"));
+
+            // Atualizar despesa com referência ao cartão
+            salva.setCartao(cartao);
+            salva = comissaoService.atualizarDespesa(salva);
+
+            // Buscar ou criar fatura e atualizar valor
+            com.empresa.comissao.domain.entity.ContaPagar fatura = faturaService.buscarOuCriarFatura(cartao,
+                    request.getDataDespesa());
+            faturaService.atualizarValorFatura(fatura);
+        } else {
+            // 3. Fluxo normal: criar ContaPagar individual
+            if (salva != null) {
+                financeiroService.criarContaPagarDeDespesa(
+                        salva,
+                        request.isPagoAgora(),
+                        request.getDataVencimento(),
+                        request.getMeioPagamento());
+            }
+        }
+
         return ResponseEntity.ok(salva);
     }
 

@@ -26,7 +26,11 @@ public class PecaServico {
     @Column(nullable = false)
     private BigDecimal valor;
 
+    @Column(length = 500)
+    private String descricao;
+
     @ManyToOne(optional = false)
     @JoinColumn(name = "veiculo_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private VeiculoServico veiculo;
 }

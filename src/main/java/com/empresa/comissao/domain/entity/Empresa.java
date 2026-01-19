@@ -2,6 +2,7 @@ package com.empresa.comissao.domain.entity;
 
 import com.empresa.comissao.domain.enums.ModoComissao;
 import com.empresa.comissao.domain.enums.Plano;
+import com.empresa.comissao.domain.enums.RegimeTributario;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -45,6 +46,22 @@ public class Empresa {
     @Column(name = "modo_comissao", nullable = false)
     @Builder.Default
     private ModoComissao modoComissao = ModoComissao.INDIVIDUAL;
+
+    // ========================================
+    // CONFIGURAÇÃO TRIBUTÁRIA
+    // ========================================
+
+    @Column(name = "aliquota_imposto", precision = 5, scale = 4)
+    @Builder.Default
+    private java.math.BigDecimal aliquotaImposto = new java.math.BigDecimal("0.0600"); // 6% default
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "regime_tributario")
+    @Builder.Default
+    private RegimeTributario regimeTributario = RegimeTributario.SIMPLES_NACIONAL;
+
+    @Column(length = 2)
+    private String uf; // Estado da empresa
 
     @Builder.Default
     private boolean ativo = true;

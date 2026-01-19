@@ -14,30 +14,40 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DashboardService {
 
-    private final OrdemServicoRepository osRepository;
+        private final OrdemServicoRepository osRepository;
 
-    public DashboardStatsResponse getStats() {
-        LocalDate now = LocalDate.now();
-        LocalDate startOfMonth = YearMonth.from(now).atDay(1);
-        LocalDate endOfMonth = YearMonth.from(now).atEndOfMonth();
+        public DashboardStatsResponse getStats(com.empresa.comissao.domain.entity.User usuario) {
+                if (usuario == null || usuario.getEmpresa() == null) {
+                        // SaaS Admin or unauthenticated - return empty stats or throw?
+                        // For now return empty to prevent leak
+                        return DashboardStatsResponse.builder().build();
+                }
 
-        long activeOsCount = osRepository
-                .countByStatusIn(List.of(StatusOrdemServico.ABERTA, StatusOrdemServico.EM_EXECUCAO));
+                com.empresa.comissao.domain.entity.Empresa empresa = usuario.getEmpresa();
 
-        long finalizedMonthCount = osRepository.countByStatusAndDataBetween(
-                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth);
+                LocalDate now = LocalDate.now();
+                LocalDate startOfMonth = YearMonth.from(now).atDay(1);
+                LocalDate endOfMonth = YearMonth.from(now).atEndOfMonth();
 
-        long veiculosMonthCount = osRepository.countVeiculosByStatusAndData(
-                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth);
+                long activeOsCount = osRepository
+                                .countByStatusInAndEmpresa(
+                                                List.of(StatusOrdemServico.ABERTA, StatusOrdemServico.EM_EXECUCAO),
+                                                empresa);
 
-        long pecasMonthCount = osRepository.countPecasByStatusAndData(
-                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth);
+                long finalizedMonthCount = osRepository.countByStatusAndDataBetweenAndEmpresa(
+                                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth, empresa);
 
-        return DashboardStatsResponse.builder()
-                .activeOsCount(activeOsCount)
-                .finalizedMonthCount(finalizedMonthCount)
-                .veiculosMonthCount(veiculosMonthCount)
-                .pecasMonthCount(pecasMonthCount)
-                .build();
-    }
+                long veiculosMonthCount = osRepository.countVeiculosByStatusAndDataAndEmpresa(
+                                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth, empresa);
+
+                long pecasMonthCount = osRepository.countPecasByStatusAndDataAndEmpresa(
+                                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth, empresa);
+
+                return DashboardStatsResponse.builder()
+                                .activeOsCount(activeOsCount)
+                                .finalizedMonthCount(finalizedMonthCount)
+                                .veiculosMonthCount(veiculosMonthCount)
+                                .pecasMonthCount(pecasMonthCount)
+                                .build();
+        }
 }

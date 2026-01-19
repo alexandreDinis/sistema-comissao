@@ -43,6 +43,12 @@ public class OrdemServicoController {
         return ResponseEntity.ok(osService.adicionarPeca(request));
     }
 
+    @DeleteMapping("/pecas/{id}")
+    @Operation(summary = "Remover peça/serviço do veículo")
+    public ResponseEntity<OrdemServicoResponse> removerPeca(@PathVariable Long id) {
+        return ResponseEntity.ok(osService.removerPeca(id));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Buscar OS por ID")
     public ResponseEntity<OrdemServicoResponse> buscarPorId(@PathVariable Long id) {
