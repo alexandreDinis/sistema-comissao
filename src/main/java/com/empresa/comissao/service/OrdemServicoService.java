@@ -75,6 +75,39 @@ public class OrdemServicoService {
                                 log.warn("⚠️ Erro ao criar ContaReceber: {}", e.getMessage());
                         }
 
+                        // ========================================
+                        // CONTAS A PAGAR PARA PRESTADORES TERCEIRIZADOS
+                        // ========================================
+                        try {
+                                for (VeiculoServico veiculo : os.getVeiculos()) {
+                                        for (PecaServico peca : veiculo.getPecas()) {
+                                                if (peca.isTerceirizado() && peca.getCustoPrestador() != null
+                                                                && peca.getCustoPrestador()
+                                                                                .compareTo(BigDecimal.ZERO) > 0) {
+
+                                                        String descricao = String.format("OS #%d - %s - %s",
+                                                                        os.getId(),
+                                                                        peca.getTipoPeca().getNome(),
+                                                                        peca.getPrestador().getNome());
+
+                                                        financeiroService.criarContaPagarPrestador(
+                                                                        peca.getPrestador(),
+                                                                        peca.getCustoPrestador(),
+                                                                        descricao,
+                                                                        java.time.LocalDate.now().plusDays(7), // Vencimento
+                                                                                                               // 7 dias
+                                                                        os.getEmpresa());
+
+                                                        log.info("💸 ContaPagar criada para prestador {} - R$ {}",
+                                                                        peca.getPrestador().getNome(),
+                                                                        peca.getCustoPrestador());
+                                                }
+                                        }
+                                }
+                        } catch (Exception e) {
+                                log.warn("⚠️ Erro ao criar ContaPagar de prestador: {}", e.getMessage());
+                        }
+
                         if (os.getUsuario() != null) {
                                 comissaoService.invalidarCache(os.getUsuario(),
                                                 java.time.YearMonth.from(faturamento.getDataFaturamento()));

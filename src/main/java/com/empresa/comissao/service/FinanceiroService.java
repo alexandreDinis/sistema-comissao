@@ -165,6 +165,35 @@ public class FinanceiroService {
         return contaPagarRepository.findVencidasByEmpresa(empresa, LocalDate.now());
     }
 
+    /**
+     * Cria conta a pagar para prestador de serviço terceirizado.
+     * Chamado automaticamente ao finalizar OS com serviços terceirizados.
+     */
+    @Transactional
+    public ContaPagar criarContaPagarPrestador(
+            com.empresa.comissao.domain.entity.Prestador prestador,
+            BigDecimal valor,
+            String descricao,
+            LocalDate dataVencimento,
+            Empresa empresa) {
+
+        log.info("💸 Criando conta a pagar para prestador: {} - R$ {}", prestador.getNome(), valor);
+
+        ContaPagar conta = ContaPagar.builder()
+                .empresa(empresa)
+                .descricao(descricao)
+                .valor(valor)
+                .dataCompetencia(LocalDate.now())
+                .dataVencimento(dataVencimento)
+                .status(StatusConta.PENDENTE)
+                .tipo(TipoContaPagar.FORNECEDOR) // Prestador = Fornecedor de serviço
+                .build();
+
+        ContaPagar salva = contaPagarRepository.save(conta);
+        log.info("✅ Conta a pagar ID {} criada para prestador {}", salva.getId(), prestador.getNome());
+        return salva;
+    }
+
     // ========================================
     // CONTAS A RECEBER
     // ========================================
