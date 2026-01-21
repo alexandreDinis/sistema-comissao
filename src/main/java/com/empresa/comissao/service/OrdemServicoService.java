@@ -26,6 +26,7 @@ public class OrdemServicoService {
         private final VeiculoServicoRepository veiculoRepository;
         private final FaturamentoRepository faturamentoRepository;
         private final PecaServicoRepository pecaRepository;
+        private final PrestadorRepository prestadorRepository;
         private final ComissaoService comissaoService;
         private final FinanceiroService financeiroService;
 
@@ -46,8 +47,13 @@ public class OrdemServicoService {
 
                         BigDecimal valorFaturamento = os.getValorTotal() != null ? os.getValorTotal() : BigDecimal.ZERO;
 
+                        // Usar a data da OS como referência para evitar problemas de timezone
+                        java.time.LocalDate dataReferencia = os.getData() != null
+                                        ? os.getData()
+                                        : java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo"));
+
                         Faturamento faturamento = Faturamento.builder()
-                                        .dataFaturamento(java.time.LocalDate.now())
+                                        .dataFaturamento(dataReferencia)
                                         .valor(valorFaturamento)
                                         .ordemServico(os)
                                         .usuario(os.getUsuario())
@@ -55,22 +61,23 @@ public class OrdemServicoService {
                                         .build();
 
                         faturamentoRepository.save(faturamento);
-                        log.info("✅ Faturamento gerado com sucesso para OS ID: {}", id);
+                        log.info("✅ Faturamento gerado com sucesso para OS ID: {} (data: {})", id, dataReferencia);
 
                         // Criar Conta a Receber automaticamente como PENDENTE
                         // Cliente precisa pagar para comissão ser computada
                         try {
-                                // Data de vencimento: usar a da OS ou padrão 30 dias
+                                // Data de vencimento: usar a da OS ou padrão 30 dias a partir da data da OS
                                 java.time.LocalDate vencimento = os.getDataVencimento() != null
                                                 ? os.getDataVencimento()
-                                                : java.time.LocalDate.now().plusDays(30);
+                                                : dataReferencia.plusDays(30);
 
                                 financeiroService.criarContaReceberDeFaturamento(
                                                 faturamento,
                                                 vencimento,
                                                 false, // PENDENTE - aguarda recebimento
                                                 null); // Meio de pagamento definido ao receber
-                                log.info("💰 ContaReceber PENDENTE criada para OS ID: {}", id);
+                                log.info("💰 ContaReceber PENDENTE criada para OS ID: {} (vencimento: {})", id,
+                                                vencimento);
                         } catch (Exception e) {
                                 log.warn("⚠️ Erro ao criar ContaReceber: {}", e.getMessage());
                         }
@@ -79,6 +86,8 @@ public class OrdemServicoService {
                         // CONTAS A PAGAR PARA PRESTADORES TERCEIRIZADOS
                         // ========================================
                         try {
+                                // Reutiliza dataReferencia definida acima
+
                                 for (VeiculoServico veiculo : os.getVeiculos()) {
                                         for (PecaServico peca : veiculo.getPecas()) {
                                                 if (peca.isTerceirizado() && peca.getCustoPrestador() != null
@@ -90,17 +99,25 @@ public class OrdemServicoService {
                                                                         peca.getTipoPeca().getNome(),
                                                                         peca.getPrestador().getNome());
 
+                                                        // Usar data definida pelo usuário ou 7 dias como padrão
+                                                        java.time.LocalDate vencimento = peca
+                                                                        .getDataVencimentoPrestador() != null
+                                                                                        ? peca.getDataVencimentoPrestador()
+                                                                                        : dataReferencia.plusDays(7);
+
                                                         financeiroService.criarContaPagarPrestador(
                                                                         peca.getPrestador(),
                                                                         peca.getCustoPrestador(),
                                                                         descricao,
-                                                                        java.time.LocalDate.now().plusDays(7), // Vencimento
-                                                                                                               // 7 dias
+                                                                        vencimento,
+                                                                        dataReferencia, // Passar data de competência
                                                                         os.getEmpresa());
 
-                                                        log.info("💸 ContaPagar criada para prestador {} - R$ {}",
+                                                        log.info("💸 ContaPagar criada para prestador {} - R$ {} (competência: {}, vencimento: {})",
                                                                         peca.getPrestador().getNome(),
-                                                                        peca.getCustoPrestador());
+                                                                        peca.getCustoPrestador(),
+                                                                        dataReferencia,
+                                                                        vencimento);
                                                 }
                                         }
                                 }
@@ -257,11 +274,33 @@ public class OrdemServicoService {
                 BigDecimal valorFinal = request.getValorCobrado() != null ? request.getValorCobrado()
                                 : tipoPeca.getValorPadrao();
 
+                // Determinar tipo de execução (padrão: INTERNO)
+                com.empresa.comissao.domain.enums.TipoExecucao tipoExecucao = request.getTipoExecucao() != null
+                                ? request.getTipoExecucao()
+                                : com.empresa.comissao.domain.enums.TipoExecucao.INTERNO;
+
+                // Buscar prestador se TERCEIRIZADO
+                Prestador prestador = null;
+                if (tipoExecucao == com.empresa.comissao.domain.enums.TipoExecucao.TERCEIRIZADO) {
+                        if (request.getPrestadorId() == null) {
+                                throw new IllegalArgumentException(
+                                                "Prestador é obrigatório para serviços terceirizados");
+                        }
+                        prestador = prestadorRepository.findById(request.getPrestadorId())
+                                        .orElseThrow(() -> new EntityNotFoundException("Prestador não encontrado"));
+                        log.info("🔧 Serviço terceirizado: {} - Prestador: {}", tipoPeca.getNome(),
+                                        prestador.getNome());
+                }
+
                 PecaServico peca = PecaServico.builder()
                                 .veiculo(veiculo)
                                 .tipoPeca(tipoPeca)
                                 .valor(valorFinal)
                                 .descricao(request.getDescricao())
+                                .tipoExecucao(tipoExecucao)
+                                .prestador(prestador)
+                                .custoPrestador(request.getCustoPrestador())
+                                .dataVencimentoPrestador(request.getDataVencimentoPrestador())
                                 .build();
 
                 // Add to vehicle list

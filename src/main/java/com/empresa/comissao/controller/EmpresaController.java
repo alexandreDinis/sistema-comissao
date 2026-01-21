@@ -38,15 +38,24 @@ public class EmpresaController {
         }
 
         Empresa empresa = user.getEmpresa();
-        return ResponseEntity.ok(new EmpresaConfigResponse(
+        return ResponseEntity.ok(buildConfigResponse(empresa));
+    }
+
+    private EmpresaConfigResponse buildConfigResponse(Empresa empresa) {
+        return new EmpresaConfigResponse(
                 empresa.getId(),
                 empresa.getNome(),
+                empresa.getRazaoSocial(),
+                empresa.getCnpj(),
+                empresa.getTelefone(),
+                empresa.getEmail(),
+                empresa.getEndereco(),
                 empresa.getModoComissao(),
-                empresa.getLogoPath() != null ? storageService.getFileUrl(empresa.getLogoPath()) : null));
+                empresa.getLogoPath() != null ? storageService.getFileUrl(empresa.getLogoPath()) : null);
     }
 
     /**
-     * Update empresa configuration (modoComissao).
+     * Update empresa configuration.
      * Only ADMIN_EMPRESA can change their company's settings.
      */
     @PatchMapping("/config")
@@ -65,14 +74,25 @@ public class EmpresaController {
         if (request.getModoComissao() != null) {
             empresa.setModoComissao(request.getModoComissao());
         }
+        if (request.getTelefone() != null) {
+            empresa.setTelefone(request.getTelefone());
+        }
+        if (request.getEmail() != null) {
+            empresa.setEmail(request.getEmail());
+        }
+        if (request.getEndereco() != null) {
+            empresa.setEndereco(request.getEndereco());
+        }
+        if (request.getRazaoSocial() != null) {
+            empresa.setRazaoSocial(request.getRazaoSocial());
+        }
+        if (request.getCnpj() != null) {
+            empresa.setCnpj(request.getCnpj());
+        }
 
         Empresa saved = empresaRepository.save(empresa);
 
-        return ResponseEntity.ok(new EmpresaConfigResponse(
-                saved.getId(),
-                saved.getNome(),
-                saved.getModoComissao(),
-                saved.getLogoPath() != null ? storageService.getFileUrl(saved.getLogoPath()) : null));
+        return ResponseEntity.ok(buildConfigResponse(saved));
     }
 
     /**
@@ -175,6 +195,11 @@ public class EmpresaController {
     public static class EmpresaConfigResponse {
         private final Long id;
         private final String nome;
+        private final String razaoSocial;
+        private final String cnpj;
+        private final String telefone;
+        private final String email;
+        private final String endereco;
         private final ModoComissao modoComissao;
         private final String logoUrl;
     }
@@ -182,5 +207,10 @@ public class EmpresaController {
     @Data
     public static class UpdateEmpresaConfigRequest {
         private ModoComissao modoComissao;
+        private String telefone;
+        private String email;
+        private String endereco;
+        private String razaoSocial;
+        private String cnpj;
     }
 }

@@ -31,6 +31,10 @@ public class CartaoCredito {
     @Column(name = "dia_vencimento", nullable = false)
     private Integer diaVencimento;
 
+    @Column(name = "dia_fechamento", nullable = false)
+    @Builder.Default
+    private Integer diaFechamento = 25; // Default: fecha dia 25
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean ativo = true;

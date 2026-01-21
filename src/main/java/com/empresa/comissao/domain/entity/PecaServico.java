@@ -52,6 +52,9 @@ public class PecaServico {
     @Column(name = "custo_prestador", precision = 19, scale = 2)
     private BigDecimal custoPrestador; // Quanto pagar ao prestador
 
+    @Column(name = "data_vencimento_prestador")
+    private java.time.LocalDate dataVencimentoPrestador; // Data de vencimento do pagamento ao prestador
+
     /**
      * Verifica se é serviço terceirizado.
      */

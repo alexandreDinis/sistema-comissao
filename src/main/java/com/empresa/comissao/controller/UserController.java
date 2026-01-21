@@ -47,7 +47,8 @@ public class UserController {
                         u.getFeatures() != null ? u.getFeatures().stream()
                                 .map(com.empresa.comissao.domain.entity.Feature::getCodigo)
                                 .collect(java.util.stream.Collectors.toSet()) : java.util.Collections.emptySet(),
-                        u.getEmpresa() != null ? u.getEmpresa().getId() : null))
+                        u.getEmpresa() != null ? u.getEmpresa().getId() : null,
+                        u.isParticipaComissao()))
                 .collect(java.util.stream.Collectors.toList());
 
         return ResponseEntity.ok(response);
@@ -66,7 +67,7 @@ public class UserController {
 
         return ResponseEntity
                 .ok(new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive(), featureCodes,
-                        user.getEmpresa() != null ? user.getEmpresa().getId() : null));
+                        user.getEmpresa() != null ? user.getEmpresa().getId() : null, user.isParticipaComissao()));
     }
 
     @lombok.Data
@@ -78,6 +79,7 @@ public class UserController {
         private boolean active;
         private java.util.Set<String> features;
         private Long empresaId;
+        private boolean participaComissao;
     }
 
     @PatchMapping("/{id}/approve")
@@ -142,6 +144,10 @@ public class UserController {
             user.setRole(request.getRole());
         }
 
+        if (request.getParticipaComissao() != null) {
+            user.setParticipaComissao(request.getParticipaComissao());
+        }
+
         repository.save(user);
 
         java.util.Set<String> featureCodes = user.getFeatures().stream()
@@ -150,7 +156,7 @@ public class UserController {
 
         return ResponseEntity
                 .ok(new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive(), featureCodes,
-                        user.getEmpresa() != null ? user.getEmpresa().getId() : null));
+                        user.getEmpresa() != null ? user.getEmpresa().getId() : null, user.isParticipaComissao()));
     }
 
     @PatchMapping("/{id}/role")
@@ -183,8 +189,10 @@ public class UserController {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole() != null ? request.getRole() : Role.FUNCIONARIO)
                 .empresa(empresa)
+                .empresa(empresa)
                 .active(true)
                 .features(new java.util.HashSet<>())
+                .participaComissao(request.getParticipaComissao() != null ? request.getParticipaComissao() : true)
                 .build();
 
         // Assign features if provided
@@ -204,7 +212,7 @@ public class UserController {
 
         return ResponseEntity
                 .ok(new UserResponse(saved.getId(), saved.getEmail(), saved.getRole(), saved.isActive(), featureCodes,
-                        saved.getEmpresa() != null ? saved.getEmpresa().getId() : null));
+                        saved.getEmpresa() != null ? saved.getEmpresa().getId() : null, saved.isParticipaComissao()));
     }
 
     @DeleteMapping("/{id}")
@@ -254,6 +262,7 @@ class CreateUserRequest {
     private Role role;
     private Long empresaId;
     private java.util.List<String> features;
+    private Boolean participaComissao;
 }
 
 @lombok.Data
@@ -261,4 +270,5 @@ class UpdateUserRequest {
     private String name; // Kept for compatibility with request, though mapped field might not exist
     private Role role;
     private java.util.List<String> features;
+    private Boolean participaComissao;
 }

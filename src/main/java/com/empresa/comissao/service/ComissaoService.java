@@ -43,14 +43,33 @@ public class ComissaoService {
         private final com.empresa.comissao.repository.OrdemServicoRepository ordemServicoRepository;
         private final RegraComissaoRepository regraComissaoRepository;
         private final com.empresa.comissao.repository.ContaReceberRepository contaReceberRepository;
+        private final com.empresa.comissao.repository.UserRepository userRepository;
+
+        @org.springframework.beans.factory.annotation.Autowired
+        @org.springframework.context.annotation.Lazy
+        private FinanceiroService financeiroService;
 
         @Transactional
         public ComissaoCalculada calcularEObterComissaoMensal(int ano, int mes,
                         com.empresa.comissao.domain.entity.User usuario) {
+                return calcularEObterComissaoMensal(ano, mes, usuario, false);
+        }
+
+        @Transactional
+        public ComissaoCalculada calcularEObterComissaoMensal(int ano, int mes,
+                        com.empresa.comissao.domain.entity.User usuario, boolean force) {
                 YearMonth anoMesReferencia = YearMonth.of(ano, mes);
 
                 log.info("🔍 Buscando comissão para: {}/{} - Usuário: {}", ano, mes,
                                 usuario != null ? usuario.getUsername() : "GLOBAL");
+
+                // ⛔ Opt-Out Check: Users who don't participate in commission should be skipped
+                if (usuario != null && !usuario.isParticipaComissao()) {
+                        log.info("🚫 Usuário {} não participa de comissão (participaComissao=false).",
+                                        usuario.getUsername());
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Usuário não configurado para receber comissões.");
+                }
 
                 // ⛔ SAFETY: SaaS/Platform Admins (without Empresa) CANNOT generate commission
                 // data
@@ -65,8 +84,21 @@ public class ComissaoService {
                                 .findFirstByAnoMesReferenciaAndUsuario(anoMesReferencia, usuario);
 
                 if (comissaoExistente.isPresent()) {
-                        log.info("✅ Comissão encontrada em cache: {}", anoMesReferencia);
-                        return comissaoExistente.get();
+                        if (force) {
+                                if (comissaoExistente.get().getQuitado() != null
+                                                && comissaoExistente.get().getQuitado()) {
+                                        log.warn("⛔ Não é possível recalcular comissão paga: {}",
+                                                        comissaoExistente.get().getId());
+                                        return comissaoExistente.get();
+                                }
+                                log.info("🔄 Forçando recálculo: Removendo comissão antiga {}",
+                                                comissaoExistente.get().getId());
+                                comissaoCalculadaRepository.delete(comissaoExistente.get());
+                                comissaoExistente = Optional.empty();
+                        } else {
+                                log.info("✅ Comissão encontrada em cache: {}", anoMesReferencia);
+                                return comissaoExistente.get();
+                        }
                 }
 
                 log.info("📊 Comissão não encontrada. Calculando...\n");
@@ -92,11 +124,21 @@ public class ComissaoService {
 
                 BigDecimal faturamentoMensalTotal;
                 if (usuario != null && usuario.getEmpresa() != null) {
-                        // Buscar recebimentos PAGOS por funcionário (regime de caixa)
-                        faturamentoMensalTotal = contaReceberRepository
-                                        .sumByRecebimentoBetweenAndFuncionario(
-                                                        usuario.getEmpresa(), usuario, inicioDoMes, fimDoMes);
-                        log.info("💰 Recebido (caixa) por funcionário: {}", faturamentoMensalTotal);
+                        // Verificar o MODO de comissão da empresa
+                        com.empresa.comissao.domain.enums.ModoComissao modo = usuario.getEmpresa().getModoComissao();
+
+                        if (modo == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
+                                // Modo COLETIVA: Faturamento base é o da EMPRESA inteira (Caixa)
+                                faturamentoMensalTotal = contaReceberRepository
+                                                .sumByRecebimentoBetween(usuario.getEmpresa(), inicioDoMes, fimDoMes);
+                                log.info("💰 Faturamento Base (COLETIVA): {}", faturamentoMensalTotal);
+                        } else {
+                                // Modo INDIVIDUAL: Apenas recebimentos do funcionário
+                                faturamentoMensalTotal = contaReceberRepository
+                                                .sumByRecebimentoBetweenAndFuncionario(
+                                                                usuario.getEmpresa(), usuario, inicioDoMes, fimDoMes);
+                                log.info("💰 Faturamento Base (INDIVIDUAL): {}", faturamentoMensalTotal);
+                        }
                 } else {
                         // Fallback: usar faturamento tradicional se não houver empresa
                         faturamentoMensalTotal = faturamentoRepository
@@ -159,7 +201,20 @@ public class ComissaoService {
                                                                                                 new BigDecimal("100"),
                                                                                                 4, RoundingMode.HALF_UP)
                                                                                 : BigDecimal.ZERO;
-                                                                faixaDescricao = fc.getDescricao();
+                                                                // Fallback: generate description if null
+                                                                if (fc.getDescricao() != null
+                                                                                && !fc.getDescricao().isBlank()) {
+                                                                        faixaDescricao = fc.getDescricao();
+                                                                } else {
+                                                                        String minStr = String.format("%,.2f",
+                                                                                        fc.getMinFaturamento());
+                                                                        String maxStr = fc.getMaxFaturamento() != null
+                                                                                        ? String.format("%,.2f", fc
+                                                                                                        .getMaxFaturamento())
+                                                                                        : "∞";
+                                                                        faixaDescricao = "R$ " + minStr + " até R$ "
+                                                                                        + maxStr;
+                                                                }
                                                                 break;
                                                         }
                                                 }
@@ -226,6 +281,12 @@ public class ComissaoService {
         @Transactional
         public ComissaoCalculada calcularComissaoEmpresaMensal(int ano, int mes,
                         com.empresa.comissao.domain.entity.Empresa empresa) {
+                return calcularComissaoEmpresaMensal(ano, mes, empresa, false);
+        }
+
+        @Transactional
+        public ComissaoCalculada calcularComissaoEmpresaMensal(int ano, int mes,
+                        com.empresa.comissao.domain.entity.Empresa empresa, boolean force) {
                 YearMonth anoMesReferencia = YearMonth.of(ano, mes);
 
                 log.info("🏢 Buscando comissão EMPRESA para: {}/{} - Empresa: {}", ano, mes,
@@ -241,8 +302,21 @@ public class ComissaoService {
                                 .findFirstByAnoMesReferenciaAndEmpresaAndUsuarioIsNull(anoMesReferencia, empresa);
 
                 if (comissaoExistente.isPresent()) {
-                        log.info("✅ Comissão empresa encontrada em cache: {}", anoMesReferencia);
-                        return comissaoExistente.get();
+                        if (force) {
+                                if (comissaoExistente.get().getQuitado() != null
+                                                && comissaoExistente.get().getQuitado()) {
+                                        log.warn("⛔ Não é possível recalcular comissão empresa paga: {}",
+                                                        comissaoExistente.get().getId());
+                                        return comissaoExistente.get();
+                                }
+                                log.info("🔄 Forçando recálculo EMPRESA: Removendo comissão antiga {}",
+                                                comissaoExistente.get().getId());
+                                comissaoCalculadaRepository.delete(comissaoExistente.get());
+                                comissaoExistente = Optional.empty();
+                        } else {
+                                log.info("✅ Comissão empresa encontrada em cache: {}", anoMesReferencia);
+                                return comissaoExistente.get();
+                        }
                 }
 
                 log.info("📊 Comissão empresa não encontrada. Calculando...");
@@ -308,7 +382,18 @@ public class ComissaoService {
                                                                                         new BigDecimal("100"), 4,
                                                                                         RoundingMode.HALF_UP)
                                                                         : BigDecimal.ZERO;
-                                                        faixaDescricao = fc.getDescricao();
+                                                        // Fallback: generate description if null
+                                                        if (fc.getDescricao() != null && !fc.getDescricao().isBlank()) {
+                                                                faixaDescricao = fc.getDescricao();
+                                                        } else {
+                                                                String minStr = String.format("%,.2f",
+                                                                                fc.getMinFaturamento());
+                                                                String maxStr = fc.getMaxFaturamento() != null
+                                                                                ? String.format("%,.2f",
+                                                                                                fc.getMaxFaturamento())
+                                                                                : "∞";
+                                                                faixaDescricao = "R$ " + minStr + " até R$ " + maxStr;
+                                                        }
                                                         break;
                                                 }
                                         }
@@ -379,6 +464,32 @@ public class ComissaoService {
 
                 comissaoCalculadaRepository.save(comissao);
                 log.info("✅ Comissão {} quitada com sucesso. Valor: {}", comissaoId, comissao.getValorQuitado());
+                comissaoCalculadaRepository.save(comissao);
+                log.info("✅ Comissão {} quitada com sucesso. Valor: {}", comissaoId, comissao.getValorQuitado());
+        }
+
+        /**
+         * Gera uma conta a pagar (PENDENTE) para o pagamento da comissão.
+         */
+        @Transactional
+        public com.empresa.comissao.domain.entity.ContaPagar gerarPagamentoComissao(Long comissaoId,
+                        LocalDate dataVencimento) {
+                log.info("💸 Gerando conta a pagar para comissão ID: {}", comissaoId);
+
+                ComissaoCalculada comissao = comissaoCalculadaRepository.findById(comissaoId)
+                                .orElseThrow(() -> new com.empresa.comissao.exception.BusinessException(
+                                                "Comissão não encontrada com ID: " + comissaoId));
+
+                if (comissao.getSaldoAReceber().compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Comissão não possui saldo positivo a pagar.");
+                }
+
+                return financeiroService.criarContaPagarComissao(
+                                comissao,
+                                comissao.getUsuario() != null ? comissao.getUsuario().getEmpresa()
+                                                : comissao.getEmpresa(),
+                                dataVencimento);
         }
 
         @Transactional
@@ -453,6 +564,15 @@ public class ComissaoService {
                 // Invalidate Cache for this user's month
                 invalidarCache(usuario, YearMonth.from(data));
 
+                // AUTO-FINANCEIRO: Gerar despesa (saída de caixa)
+                if (usuario != null && usuario.getEmpresa() != null) {
+                        try {
+                                financeiroService.criarDespesaAdiantamento(salvo, usuario.getEmpresa());
+                        } catch (Exception e) {
+                                log.warn("⚠️ Falha ao criar registro financeiro para adiantamento: {}", e.getMessage());
+                        }
+                }
+
                 return salvo;
         }
 
@@ -526,12 +646,20 @@ public class ComissaoService {
                                         if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
                                                 CategoriaDespesa cat = (CategoriaDespesa) row[0];
                                                 BigDecimal val = (BigDecimal) row[1];
-                                                despesasPorCategoria.put(cat, val.setScale(2, RoundingMode.HALF_UP));
+
+                                                // ⛔ DRE FILTER: Tax is calculated (Competence), not expense (Cash)
+                                                // We ignore "IMPOSTOS" category here to avoid double counting
+                                                // or conceptual mixing. Tax line is separate.
+                                                if (cat != CategoriaDespesa.IMPOSTOS) {
+                                                        despesasPorCategoria.put(cat,
+                                                                        val.setScale(2, RoundingMode.HALF_UP));
+                                                }
                                         }
                                 });
 
-                BigDecimal despesasTotal = despesaRepository.sumValorByDataDespesaBetween(inicioDoMes, fimDoMes)
-                                .orElse(BigDecimal.ZERO)
+                // Sum only valid operational expenses (excluding taxes)
+                BigDecimal despesasTotal = despesasPorCategoria.values().stream()
+                                .reduce(BigDecimal.ZERO, BigDecimal::add)
                                 .setScale(2, RoundingMode.HALF_UP);
 
                 log.info("💸 Despesas totais: {}", despesasTotal);
@@ -788,5 +916,46 @@ public class ComissaoService {
                                 empresaToUse.getNome(), ano, mes != null ? mes : "TODOS");
 
                 return ordemServicoRepository.findRankingClientes(empresaToUse.getId(), ano, mes);
+        }
+
+        /**
+         * Lista as comissões de todos os funcionários da empresa para um determinado
+         * mês.
+         * Usado pelo Admin/Financeiro para gestão de pagamentos.
+         */
+        @Transactional
+        public List<ComissaoCalculada> listarComissoesEmpresa(int ano, int mes,
+                        com.empresa.comissao.domain.entity.Empresa empresa) {
+                return listarComissoesEmpresa(ano, mes, empresa, false);
+        }
+
+        @Transactional
+        public List<ComissaoCalculada> listarComissoesEmpresa(int ano, int mes,
+                        com.empresa.comissao.domain.entity.Empresa empresa, boolean force) {
+                if (empresa == null) {
+                        throw new com.empresa.comissao.exception.BusinessException("Empresa é obrigatória.");
+                }
+
+                log.info("📊 Listando comissões de todos os funcionários para {}/{} - Empresa: {}",
+                                ano, mes, empresa.getNome());
+
+                List<com.empresa.comissao.domain.entity.User> funcionarios = userRepository.findByEmpresa(empresa);
+                List<ComissaoCalculada> comissoes = new java.util.ArrayList<>();
+
+                for (com.empresa.comissao.domain.entity.User funcionario : funcionarios) {
+                        try {
+                                if (!funcionario.isParticipaComissao()) {
+                                        continue; // Skip without error log
+                                }
+                                ComissaoCalculada comissao = calcularEObterComissaoMensal(ano, mes, funcionario, force);
+                                comissoes.add(comissao);
+                        } catch (Exception e) {
+                                log.warn("⚠️ Erro ao calcular comissão para {}: {}", funcionario.getEmail(),
+                                                e.getMessage());
+                        }
+                }
+
+                log.info("✅ Retornando {} comissões calculadas", comissoes.size());
+                return comissoes;
         }
 }

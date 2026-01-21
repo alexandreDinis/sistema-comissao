@@ -36,9 +36,21 @@ public class FaturaService {
      */
     @Transactional
     public ContaPagar buscarOuCriarFatura(CartaoCredito cartao, LocalDate dataDespesa) {
-        String mesReferencia = dataDespesa.format(MES_FORMATTER);
+        // Determinar mês da fatura baseado no ciclo de fechamento
+        // Se despesa é APÓS o fechamento, vai para próxima fatura
+        YearMonth mesFatura;
+        int diaFechamento = cartao.getDiaFechamento() != null ? cartao.getDiaFechamento() : 25;
 
-        log.info("📄 Buscando fatura: {} - {}", cartao.getNome(), mesReferencia);
+        if (dataDespesa.getDayOfMonth() > diaFechamento) {
+            mesFatura = YearMonth.from(dataDespesa).plusMonths(1);
+        } else {
+            mesFatura = YearMonth.from(dataDespesa);
+        }
+
+        String mesReferencia = mesFatura.format(MES_FORMATTER);
+
+        log.info("📄 Buscando fatura: {} - {} (Despesa: {}, Fechamento dia: {})",
+                cartao.getNome(), mesReferencia, dataDespesa, diaFechamento);
 
         // Buscar fatura existente
         ContaPagar faturaExistente = contaPagarRepository

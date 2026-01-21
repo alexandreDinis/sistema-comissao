@@ -91,9 +91,19 @@ public class OrdemServicoController {
         OrdemServico os = osService.buscarEntidadePorId(id);
         byte[] pdfBytes = pdfService.gerarOrdemServicoPdf(os);
 
+        // Montar nome do arquivo: NomeEmpresa_OS_123.pdf
+        String nomeEmpresa = "Empresa";
+        if (os.getEmpresa() != null && os.getEmpresa().getNome() != null) {
+            // Remover caracteres especiais e espaços para um nome de arquivo válido
+            nomeEmpresa = os.getEmpresa().getNome()
+                    .replaceAll("[^a-zA-Z0-9]", "_")
+                    .replaceAll("_+", "_");
+        }
+        String nomeArquivo = nomeEmpresa + "_OS_" + id + ".pdf";
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
-        headers.setContentDispositionFormData("attachment", "OS-" + id + ".pdf");
+        headers.setContentDispositionFormData("attachment", nomeArquivo);
 
         return ResponseEntity.ok()
                 .headers(headers)

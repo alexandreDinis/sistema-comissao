@@ -48,8 +48,11 @@ public class FinanceiroController {
             contas = financeiroService.listarContasPagarPendentes(empresa);
         } else if ("VENCIDO".equalsIgnoreCase(status)) {
             contas = financeiroService.listarContasPagarVencidas(empresa);
+        } else if ("PAGO".equalsIgnoreCase(status)) {
+            contas = financeiroService.listarContasPagarPagas(empresa);
         } else {
-            contas = financeiroService.listarContasPagarPendentes(empresa);
+            // Sem filtro: retorna todas
+            contas = financeiroService.listarTodasContasPagar(empresa);
         }
 
         return ResponseEntity.ok(contas);
@@ -205,6 +208,82 @@ public class FinanceiroController {
     }
 
     // ========================================
+    // DISTRIBUIÇÃO DE LUCROS
+    // ========================================
+
+    @GetMapping("/distribuicao-lucros")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<List<ContaPagar>> listarDistribuicoesLucro(
+            @AuthenticationPrincipal User usuario) {
+
+        Empresa empresa = usuario.getEmpresa();
+        if (empresa == null) {
+            throw new BusinessException("Usuário não está vinculado a uma empresa");
+        }
+
+        return ResponseEntity.ok(financeiroService.listarDistribuicoesLucro(empresa));
+    }
+
+    @PostMapping("/distribuicao-lucros")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<ContaPagar> criarDistribuicaoLucros(
+            @RequestBody DistribuicaoLucrosRequest request,
+            @AuthenticationPrincipal User usuario) {
+
+        Empresa empresa = usuario.getEmpresa();
+        if (empresa == null) {
+            throw new BusinessException("Usuário não está vinculado a uma empresa");
+        }
+
+        ContaPagar conta = financeiroService.criarDistribuicaoLucros(
+                empresa,
+                request.valor(),
+                request.dataCompetencia(),
+                request.dataVencimento(),
+                request.descricao());
+
+        return ResponseEntity.ok(conta);
+    }
+
+    // ========================================
+    // PAGAMENTO DE IMPOSTO (DAS)
+    // ========================================
+
+    @GetMapping("/imposto-pago")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<List<ContaPagar>> listarImpostosPagos(
+            @AuthenticationPrincipal User usuario) {
+
+        Empresa empresa = usuario.getEmpresa();
+        if (empresa == null) {
+            throw new BusinessException("Usuário não está vinculado a uma empresa");
+        }
+
+        return ResponseEntity.ok(financeiroService.listarImpostosPagos(empresa));
+    }
+
+    @PostMapping("/imposto-pago")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<ContaPagar> criarImpostoPago(
+            @RequestBody ImpostoPagoRequest request,
+            @AuthenticationPrincipal User usuario) {
+
+        Empresa empresa = usuario.getEmpresa();
+        if (empresa == null) {
+            throw new BusinessException("Usuário não está vinculado a uma empresa");
+        }
+
+        ContaPagar conta = financeiroService.criarImpostoPago(
+                empresa,
+                request.valor(),
+                request.dataCompetencia(),
+                request.dataVencimento(),
+                request.descricao());
+
+        return ResponseEntity.ok(conta);
+    }
+
+    // ========================================
     // DTOs
     // ========================================
 
@@ -223,5 +302,19 @@ public class FinanceiroController {
             BigDecimal entradas,
             BigDecimal saidas,
             BigDecimal saldo) {
+    }
+
+    public record DistribuicaoLucrosRequest(
+            BigDecimal valor,
+            LocalDate dataCompetencia,
+            LocalDate dataVencimento,
+            String descricao) {
+    }
+
+    public record ImpostoPagoRequest(
+            BigDecimal valor,
+            LocalDate dataCompetencia,
+            LocalDate dataVencimento,
+            String descricao) {
     }
 }

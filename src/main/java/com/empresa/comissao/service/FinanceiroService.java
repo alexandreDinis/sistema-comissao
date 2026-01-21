@@ -159,6 +159,20 @@ public class FinanceiroService {
     }
 
     /**
+     * Lista contas a pagar já pagas.
+     */
+    public List<ContaPagar> listarContasPagarPagas(Empresa empresa) {
+        return contaPagarRepository.findByEmpresaAndStatusOrderByDataVencimentoAsc(empresa, StatusConta.PAGO);
+    }
+
+    /**
+     * Lista todas as contas a pagar.
+     */
+    public List<ContaPagar> listarTodasContasPagar(Empresa empresa) {
+        return contaPagarRepository.findByEmpresaOrderByDataVencimentoAsc(empresa);
+    }
+
+    /**
      * Lista contas a pagar vencidas.
      */
     public List<ContaPagar> listarContasPagarVencidas(Empresa empresa) {
@@ -168,6 +182,13 @@ public class FinanceiroService {
     /**
      * Cria conta a pagar para prestador de serviço terceirizado.
      * Chamado automaticamente ao finalizar OS com serviços terceirizados.
+     * 
+     * @param prestador       O prestador de serviço
+     * @param valor           Valor a pagar
+     * @param descricao       Descrição da conta
+     * @param dataVencimento  Data de vencimento
+     * @param dataCompetencia Data de competência (normalmente a data da OS)
+     * @param empresa         Empresa do contexto
      */
     @Transactional
     public ContaPagar criarContaPagarPrestador(
@@ -175,15 +196,17 @@ public class FinanceiroService {
             BigDecimal valor,
             String descricao,
             LocalDate dataVencimento,
+            LocalDate dataCompetencia,
             Empresa empresa) {
 
-        log.info("💸 Criando conta a pagar para prestador: {} - R$ {}", prestador.getNome(), valor);
+        log.info("💸 Criando conta a pagar para prestador: {} - R$ {} (competência: {}, vencimento: {})",
+                prestador.getNome(), valor, dataCompetencia, dataVencimento);
 
         ContaPagar conta = ContaPagar.builder()
                 .empresa(empresa)
                 .descricao(descricao)
                 .valor(valor)
-                .dataCompetencia(LocalDate.now())
+                .dataCompetencia(dataCompetencia)
                 .dataVencimento(dataVencimento)
                 .status(StatusConta.PENDENTE)
                 .tipo(TipoContaPagar.FORNECEDOR) // Prestador = Fornecedor de serviço
@@ -192,6 +215,170 @@ public class FinanceiroService {
         ContaPagar salva = contaPagarRepository.save(conta);
         log.info("✅ Conta a pagar ID {} criada para prestador {}", salva.getId(), prestador.getNome());
         return salva;
+    }
+
+    /**
+     * Cria conta a pagar automaticamente para adiantamento (STATUS: PAGO).
+     */
+    @Transactional
+    public ContaPagar criarDespesaAdiantamento(
+            com.empresa.comissao.domain.entity.PagamentoAdiantado adiantamento,
+            Empresa empresa) {
+
+        log.info("💸 Criando despesa automática para adiantamento ID: {}", adiantamento.getId());
+
+        String descricao = String.format("Adiantamento Salarial - %s - %s",
+                adiantamento.getUsuario() != null ? adiantamento.getUsuario().getUsername() : "N/A",
+                adiantamento.getDescricao() != null ? adiantamento.getDescricao() : "");
+
+        ContaPagar conta = ContaPagar.builder()
+                .empresa(empresa)
+                .funcionario(adiantamento.getUsuario())
+                .descricao(descricao)
+                .valor(adiantamento.getValor())
+                .dataCompetencia(adiantamento.getDataPagamento()) // Dia do adiantamento
+                .dataVencimento(adiantamento.getDataPagamento()) // Venceu no dia
+                .dataPagamento(adiantamento.getDataPagamento()) // Já foi pago
+                .status(StatusConta.PAGO)
+                .tipo(TipoContaPagar.ADIANTAMENTO)
+                .meioPagamento(MeioPagamento.PIX) // Default para adiantamento
+                .build();
+
+        ContaPagar salva = contaPagarRepository.save(conta);
+        log.info("✅ Despesa/Conta Paga ID {} criada para adiantamento", salva.getId());
+        return salva;
+    }
+
+    /**
+     * Cria conta a pagar pendente para saldo de comissão.
+     */
+    @Transactional
+    public ContaPagar criarContaPagarComissao(
+            com.empresa.comissao.domain.entity.ComissaoCalculada comissao,
+            Empresa empresa,
+            LocalDate dataVencimento) {
+
+        log.info("💸 Criando conta a pagar para comissão ID: {}", comissao.getId());
+
+        String nomeUsuario = comissao.getUsuario() != null ? comissao.getUsuario().getUsername()
+                : (empresa != null ? empresa.getNome() : "GLOBAL");
+
+        String descricao = String.format("Comissão %s - Ref: %s",
+                nomeUsuario,
+                comissao.getAnoMesReferencia().toString());
+
+        ContaPagar conta = ContaPagar.builder()
+                .empresa(empresa)
+                .funcionario(comissao.getUsuario())
+                .descricao(descricao)
+                .valor(comissao.getSaldoAReceber()) // Valor Líquido
+                .dataCompetencia(comissao.getAnoMesReferencia().atEndOfMonth())
+                .dataVencimento(dataVencimento)
+                .status(StatusConta.PENDENTE)
+                .tipo(TipoContaPagar.COMISSAO_FUNCIONARIO)
+                .build();
+
+        ContaPagar salva = contaPagarRepository.save(conta);
+        log.info("✅ Conta a pagar ID {} criada para comissão", salva.getId());
+        return salva;
+    }
+
+    /**
+     * Cria conta a pagar para distribuição de lucros (dividendos).
+     * IMPORTANTE: Sempre cria como PENDENTE. Tipo é fixo e não editável.
+     * NÃO afeta DRE, apenas fluxo de caixa.
+     */
+    @Transactional
+    public ContaPagar criarDistribuicaoLucros(
+            Empresa empresa,
+            BigDecimal valor,
+            LocalDate dataCompetencia,
+            LocalDate dataVencimento,
+            String descricao) {
+
+        log.info("💰 Criando distribuição de lucros para empresa: {} - R$ {}",
+                empresa.getNome(), valor);
+
+        if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Valor da distribuição deve ser maior que zero.");
+        }
+
+        String descricaoFinal = descricao != null && !descricao.isBlank()
+                ? descricao
+                : "Distribuição de Lucros - " + dataCompetencia.getMonth() + "/" + dataCompetencia.getYear();
+
+        ContaPagar conta = ContaPagar.builder()
+                .empresa(empresa)
+                .descricao(descricaoFinal)
+                .valor(valor)
+                .dataCompetencia(dataCompetencia)
+                .dataVencimento(dataVencimento)
+                .status(StatusConta.PENDENTE) // SEMPRE PENDENTE
+                .tipo(TipoContaPagar.DISTRIBUICAO_LUCROS) // TIPO FIXO
+                .build();
+
+        ContaPagar salva = contaPagarRepository.save(conta);
+        log.info("✅ Distribuição de lucros ID {} criada. Status: PENDENTE", salva.getId());
+        return salva;
+    }
+
+    /**
+     * Lista distribuições de lucro da empresa.
+     */
+    public List<ContaPagar> listarDistribuicoesLucro(Empresa empresa) {
+        return contaPagarRepository.findByEmpresaAndTipoOrderByDataVencimentoDesc(empresa,
+                TipoContaPagar.DISTRIBUICAO_LUCROS);
+    }
+
+    // ========================================
+    // PAGAMENTO DE IMPOSTO (DAS)
+    // ========================================
+
+    /**
+     * Cria conta a pagar para pagamento de imposto (DAS).
+     * IMPORTANTE: Sempre cria como PENDENTE. Tipo é fixo IMPOSTO_PAGO.
+     * NÃO afeta DRE diretamente (DRE usa imposto calculado), apenas fluxo de caixa.
+     */
+    @Transactional
+    public ContaPagar criarImpostoPago(
+            Empresa empresa,
+            BigDecimal valor,
+            LocalDate dataCompetencia,
+            LocalDate dataVencimento,
+            String descricao) {
+
+        log.info("💰 Criando pagamento de imposto (DAS) para empresa: {} - R$ {}",
+                empresa.getNome(), valor);
+
+        if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Valor do imposto deve ser maior que zero.");
+        }
+
+        String descricaoFinal = descricao != null && !descricao.isBlank()
+                ? descricao
+                : "DAS - Competência " + dataCompetencia.getMonth() + "/" + dataCompetencia.getYear();
+
+        ContaPagar conta = ContaPagar.builder()
+                .empresa(empresa)
+                .descricao(descricaoFinal)
+                .valor(valor)
+                .dataCompetencia(dataCompetencia)
+                .dataVencimento(dataVencimento)
+                .status(StatusConta.PENDENTE) // SEMPRE PENDENTE
+                .tipo(TipoContaPagar.IMPOSTO_PAGO) // TIPO FIXO
+                .build();
+
+        ContaPagar salva = contaPagarRepository.save(conta);
+        log.info("✅ Pagamento de DAS ID {} criado. Status: PENDENTE", salva.getId());
+        return salva;
+    }
+
+    /**
+     * Lista pagamentos de imposto (DAS) da empresa.
+     */
+    public List<ContaPagar> listarImpostosPagos(Empresa empresa) {
+        return contaPagarRepository.findByEmpresaAndTipoOrderByDataVencimentoDesc(empresa,
+                TipoContaPagar.IMPOSTO_PAGO);
     }
 
     // ========================================

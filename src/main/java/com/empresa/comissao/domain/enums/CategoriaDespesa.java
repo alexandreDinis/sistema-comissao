@@ -15,6 +15,8 @@ public enum CategoriaDespesa {
 
     // Pessoal
     SALARIOS("Salários"),
+    ADIANTAMENTOS("Adiantamentos"),
+    COMISSOES_PAGAS("Comissões Pagas"),
     PROLABORE("Pró-Labore"),
     BENEFICIOS("Benefícios"),
 

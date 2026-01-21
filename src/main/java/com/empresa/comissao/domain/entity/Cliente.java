@@ -8,7 +8,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 
 @Entity
-@Table(name = "clientes")
+@Table(name = "clientes", uniqueConstraints = {
+        @UniqueConstraint(columnNames = { "cnpj", "empresa_id" })
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -24,7 +26,6 @@ public class Cliente {
 
     private String nomeFantasia;
 
-    @Column(unique = true)
     private String cnpj;
 
     private String endereco;

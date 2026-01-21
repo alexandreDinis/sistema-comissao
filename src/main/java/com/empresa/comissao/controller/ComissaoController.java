@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @Slf4j
@@ -85,6 +84,89 @@ public class ComissaoController {
         log.info("💸 Quitando comissão ID: {}", id);
         comissaoService.quitarComissao(id);
         return ResponseEntity.ok("Comissão quitada com sucesso.");
+    }
+
+    /**
+     * Endpoint para gerar conta a pagar (Financeiro) referente a uma comissão.
+     */
+    @PostMapping("/gerar-pagamento/{id}")
+    @PreAuthorize("hasRole('ADMIN_EMPRESA')")
+    public ResponseEntity<Void> gerarPagamentoComissao(
+            @PathVariable Long id,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dataVencimento) {
+
+        if (dataVencimento == null) {
+            dataVencimento = java.time.LocalDate.now();
+        }
+
+        log.info("💸 Gerando pagamento financeiro para comissão ID: {} - Vencimento: {}", id, dataVencimento);
+        comissaoService.gerarPagamentoComissao(id, dataVencimento);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Endpoint para Admin/Financeiro listar comissões de todos os funcionários.
+     */
+    @GetMapping("/empresa/{ano}/{mes}")
+    @PreAuthorize("hasRole('ADMIN_EMPRESA')")
+    public ResponseEntity<java.util.List<ComissaoFuncionarioResponse>> listarComissoesEmpresa(
+            @PathVariable int ano,
+            @PathVariable int mes,
+            @RequestParam(required = false, defaultValue = "false") boolean force) {
+
+        org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        com.empresa.comissao.domain.entity.User usuario = null;
+
+        if (authentication != null
+                && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
+            usuario = (com.empresa.comissao.domain.entity.User) authentication.getPrincipal();
+        }
+
+        if (usuario == null || usuario.getEmpresa() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        Empresa empresa = empresaRepository.findById(usuario.getEmpresa().getId())
+                .orElse(usuario.getEmpresa());
+
+        java.util.List<com.empresa.comissao.domain.entity.ComissaoCalculada> comissoes = comissaoService
+                .listarComissoesEmpresa(ano, mes, empresa, force);
+
+        java.util.List<ComissaoFuncionarioResponse> response = comissoes.stream()
+                .map(c -> new ComissaoFuncionarioResponse(
+                        c.getId(),
+                        c.getUsuario() != null ? c.getUsuario().getId() : null,
+                        c.getUsuario() != null ? c.getUsuario().getEmail().split("@")[0] : "Funcionário",
+                        c.getUsuario() != null ? c.getUsuario().getEmail() : "",
+                        c.getAnoMesReferencia().toString(),
+                        c.getFaturamentoMensalTotal(),
+                        c.getPorcentagemComissaoAplicada(),
+                        c.getValorBrutoComissao(),
+                        c.getValorTotalAdiantamentos(),
+                        c.getSaldoAReceber(),
+                        c.getQuitado() != null && c.getQuitado(),
+                        c.getDataQuitacao() != null ? c.getDataQuitacao().toString() : null))
+                .collect(java.util.stream.Collectors.toList());
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class ComissaoFuncionarioResponse {
+        private Long id;
+        private Long funcionarioId;
+        private String funcionarioNome;
+        private String funcionarioEmail;
+        private String anoMesReferencia;
+        private BigDecimal faturamento;
+        private BigDecimal porcentagem;
+        private BigDecimal valorBruto;
+        private BigDecimal adiantamentos;
+        private BigDecimal saldoAPagar;
+        private boolean quitado;
+        private String dataQuitacao;
     }
 
     @Getter

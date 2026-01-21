@@ -47,6 +47,10 @@ public class User implements UserDetails {
     @Column(name = "must_change_password")
     private boolean mustChangePassword = false;
 
+    @Builder.Default
+    @Column(name = "participa_comissao")
+    private boolean participaComissao = true;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         java.util.List<GrantedAuthority> authorities = new java.util.ArrayList<>();
