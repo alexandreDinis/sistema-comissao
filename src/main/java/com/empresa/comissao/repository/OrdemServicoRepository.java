@@ -33,14 +33,14 @@ public interface OrdemServicoRepository extends JpaRepository<OrdemServico, Long
                         @org.springframework.data.repository.query.Param("end") java.time.LocalDate end,
                         @org.springframework.data.repository.query.Param("empresa") com.empresa.comissao.domain.entity.Empresa empresa);
 
-        @org.springframework.data.jpa.repository.Query("SELECT new com.empresa.comissao.dto.response.RankingClienteDTO(c.id, c.nomeFantasia, COUNT(os), SUM(os.valorTotal)) "
+        @org.springframework.data.jpa.repository.Query("SELECT new com.empresa.comissao.dto.response.RankingClienteDTO(c.id, COALESCE(c.nomeFantasia, c.razaoSocial), COUNT(os), SUM(os.valorTotal)) "
                         +
                         "FROM OrdemServico os JOIN os.cliente c " +
                         "WHERE os.empresa.id = :empresaId " +
                         "AND os.status = 'FINALIZADA' " +
                         "AND YEAR(os.data) = :ano " +
                         "AND (:mes IS NULL OR MONTH(os.data) = :mes) " +
-                        "GROUP BY c.id, c.nomeFantasia " +
+                        "GROUP BY c.id, c.nomeFantasia, c.razaoSocial " +
                         "ORDER BY SUM(os.valorTotal) DESC")
         List<com.empresa.comissao.dto.response.RankingClienteDTO> findRankingClientes(
                         @org.springframework.data.repository.query.Param("empresaId") Long empresaId,

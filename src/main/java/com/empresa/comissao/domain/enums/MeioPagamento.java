@@ -10,5 +10,6 @@ public enum MeioPagamento {
     CARTAO_DEBITO,
     BOLETO,
     TRANSFERENCIA,
-    CHEQUE
+    CHEQUE,
+    OUTROS
 }

@@ -271,6 +271,13 @@ public class OrdemServicoService {
                 TipoPeca tipoPeca = tipoPecaRepository.findById(request.getTipoPecaId())
                                 .orElseThrow(() -> new EntityNotFoundException("Peça não encontrada no catálogo"));
 
+                // Validate Tenant for TipoPeca
+                if (tipoPeca.getEmpresa() != null && veiculo.getOrdemServico().getEmpresa() != null) {
+                        if (!tipoPeca.getEmpresa().getId().equals(veiculo.getOrdemServico().getEmpresa().getId())) {
+                                throw new EntityNotFoundException("Peça não encontrada no catálogo desta empresa");
+                        }
+                }
+
                 BigDecimal valorFinal = request.getValorCobrado() != null ? request.getValorCobrado()
                                 : tipoPeca.getValorPadrao();
 
@@ -288,6 +295,15 @@ public class OrdemServicoService {
                         }
                         prestador = prestadorRepository.findById(request.getPrestadorId())
                                         .orElseThrow(() -> new EntityNotFoundException("Prestador não encontrado"));
+
+                        // Validate Tenant for Prestador
+                        if (prestador.getEmpresa() != null && veiculo.getOrdemServico().getEmpresa() != null) {
+                                if (!prestador.getEmpresa().getId()
+                                                .equals(veiculo.getOrdemServico().getEmpresa().getId())) {
+                                        throw new EntityNotFoundException("Prestador não encontrado nesta empresa");
+                                }
+                        }
+
                         log.info("🔧 Serviço terceirizado: {} - Prestador: {}", tipoPeca.getNome(),
                                         prestador.getNome());
                 }

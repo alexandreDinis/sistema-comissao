@@ -83,4 +83,14 @@ public class ValidadorDocumento {
             throw new IllegalArgumentException("CNPJ inválido: " + cnpj);
         }
     }
+
+    public static void validarCpf(String cpf) {
+        String normalizado = normalizar(cpf);
+        if (normalizado == null || normalizado.trim().isEmpty()) {
+            throw new IllegalArgumentException("CPF não pode ser vazio.");
+        }
+        if (!isCpf(normalizado)) {
+            throw new IllegalArgumentException("CPF inválido: " + cpf);
+        }
+    }
 }

@@ -9,7 +9,8 @@ import lombok.Builder;
 
 @Entity
 @Table(name = "clientes", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "cnpj", "empresa_id" })
+        @UniqueConstraint(columnNames = { "cnpj", "empresa_id" }),
+        @UniqueConstraint(columnNames = { "cpf", "empresa_id" })
 })
 @Data
 @NoArgsConstructor
@@ -27,6 +28,14 @@ public class Cliente {
     private String nomeFantasia;
 
     private String cnpj;
+
+    @Column(length = 14)
+    private String cpf;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_pessoa", length = 20)
+    @Builder.Default
+    private com.empresa.comissao.domain.enums.TipoPessoa tipoPessoa = com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
 
     private String endereco;
     private String contato;

@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -34,6 +35,9 @@ public class CartaoCredito {
     @Column(name = "dia_fechamento", nullable = false)
     @Builder.Default
     private Integer diaFechamento = 25; // Default: fecha dia 25
+
+    @Column(name = "limite", precision = 19, scale = 2)
+    private BigDecimal limite;
 
     @Column(nullable = false)
     @Builder.Default

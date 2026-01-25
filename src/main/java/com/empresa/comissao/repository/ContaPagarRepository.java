@@ -76,15 +76,42 @@ public interface ContaPagarRepository extends JpaRepository<ContaPagar, Long> {
         // FATURAS DE CARTÃO
         // ========================================
 
-        // Buscar fatura por cartão e mês
+        // Buscar faturas por cartão e mês (pode haver mais de uma se houve pagamento
+        // parcial/antecipado)
         @Query("SELECT c FROM ContaPagar c WHERE c.cartao = :cartao AND c.mesReferencia = :mesRef AND c.tipo = :tipo")
-        java.util.Optional<ContaPagar> findByCartaoAndMesReferenciaAndTipo(
+        List<ContaPagar> findByCartaoAndMesReferenciaAndTipo(
                         @Param("cartao") com.empresa.comissao.domain.entity.CartaoCredito cartao,
                         @Param("mesRef") String mesReferencia,
                         @Param("tipo") com.empresa.comissao.domain.enums.TipoContaPagar tipo);
+
+        // Somar valor de faturas PAGAS por cartão e mês
+        @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaPagar c " +
+                        "WHERE c.cartao = :cartao AND c.mesReferencia = :mesRef AND c.tipo = 'FATURA_CARTAO' AND c.status = :status")
+        BigDecimal sumValorPagoByCartaoAndMes(
+                        @Param("cartao") com.empresa.comissao.domain.entity.CartaoCredito cartao,
+                        @Param("mesRef") String mesReferencia,
+                        @Param("status") StatusConta status);
 
         // Listar faturas de cartão por empresa
         List<ContaPagar> findByEmpresaAndTipoOrderByDataVencimentoDesc(
                         Empresa empresa,
                         com.empresa.comissao.domain.enums.TipoContaPagar tipo);
+
+        // Listar faturas por empresa, tipo e status
+        List<ContaPagar> findByEmpresaAndTipoAndStatus(
+                        Empresa empresa,
+                        com.empresa.comissao.domain.enums.TipoContaPagar tipo,
+                        StatusConta status);
+
+        // Buscar conta a pagar associada a uma comissão
+        java.util.Optional<ContaPagar> findFirstByComissao(
+                        com.empresa.comissao.domain.entity.ComissaoCalculada comissao);
+
+        // Somar valor de faturas pendentes por cartão (para cálculo de limite
+        // disponível)
+        @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaPagar c " +
+                        "WHERE c.cartao = :cartao AND c.status = :status AND c.tipo = 'FATURA_CARTAO'")
+        BigDecimal sumValorByCartaoAndStatus(
+                        @Param("cartao") com.empresa.comissao.domain.entity.CartaoCredito cartao,
+                        @Param("status") StatusConta status);
 }

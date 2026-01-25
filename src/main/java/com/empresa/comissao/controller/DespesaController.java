@@ -28,6 +28,7 @@ public class DespesaController {
     private final com.empresa.comissao.service.FinanceiroService financeiroService;
     private final com.empresa.comissao.service.FaturaService faturaService;
     private final com.empresa.comissao.repository.CartaoCreditoRepository cartaoRepository;
+    private final com.empresa.comissao.repository.DespesaRepository despesaRepository;
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -35,6 +36,7 @@ public class DespesaController {
     public ResponseEntity<Despesa> criar(
             @Valid @RequestBody DespesaRequestDTO request,
             @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+        // ... (mantém igual) ok, replace content abaixo vai substituir tudo
 
         // 1. Registrar a Despesa
         Despesa salva = comissaoService.adicionarDespesa(
@@ -48,6 +50,9 @@ public class DespesaController {
         if (request.getCartaoId() != null) {
             com.empresa.comissao.domain.entity.CartaoCredito cartao = cartaoRepository.findById(request.getCartaoId())
                     .orElseThrow(() -> new com.empresa.comissao.exception.BusinessException("Cartão não encontrado"));
+
+            // Validar limite disponível antes de adicionar despesa
+            faturaService.validarLimiteDisponivel(cartao, request.getValor());
 
             // Atualizar despesa com referência ao cartão
             salva.setCartao(cartao);
@@ -76,5 +81,31 @@ public class DespesaController {
     public ResponseEntity<List<Despesa>> listar(
             @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
         return ResponseEntity.ok(comissaoService.listarDespesas(usuario != null ? usuario.getEmpresa() : null));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Excluir despesa", description = "Remove uma despesa e atualiza a fatura do cartão se necessário.")
+    public ResponseEntity<Void> excluir(@org.springframework.web.bind.annotation.PathVariable Long id) {
+        Despesa despesa = despesaRepository.findById(id)
+                .orElseThrow(() -> new com.empresa.comissao.exception.BusinessException("Despesa não encontrada"));
+
+        com.empresa.comissao.domain.entity.CartaoCredito cartao = despesa.getCartao();
+        java.time.LocalDate dataDespesa = despesa.getDataDespesa();
+
+        despesaRepository.delete(despesa);
+
+        if (cartao != null) {
+            // Recalcular fatura associada
+            try {
+                com.empresa.comissao.domain.entity.ContaPagar fatura = faturaService.buscarOuCriarFatura(cartao,
+                        dataDespesa);
+                faturaService.atualizarValorFatura(fatura);
+            } catch (Exception e) {
+                // Fatura pode ter sido excluida ou nao existir mais, ignorar
+            }
+        }
+
+        return ResponseEntity.noContent().build();
     }
 }

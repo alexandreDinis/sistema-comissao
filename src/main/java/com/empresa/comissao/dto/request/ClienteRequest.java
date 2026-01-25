@@ -10,8 +10,11 @@ public class ClienteRequest {
 
     private String nomeFantasia;
 
-    @NotBlank(message = "CNPJ é obrigatório")
     private String cnpj;
+
+    private String cpf;
+
+    private com.empresa.comissao.domain.enums.TipoPessoa tipoPessoa;
 
     @NotBlank(message = "Endereço é obrigatório")
     private String endereco;

@@ -22,7 +22,15 @@ public class ClienteService {
 
     @Transactional
     public ClienteResponse criar(ClienteRequest request, com.empresa.comissao.domain.entity.User usuario) {
-        com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
+        com.empresa.comissao.domain.enums.TipoPessoa tipo = request.getTipoPessoa() != null
+                ? request.getTipoPessoa()
+                : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
+
+        if (tipo == com.empresa.comissao.domain.enums.TipoPessoa.FISICA) {
+            com.empresa.comissao.validation.ValidadorDocumento.validarCpf(request.getCpf());
+        } else {
+            com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
+        }
 
         Cliente cliente = new Cliente();
         updateEntity(cliente, request);
@@ -38,7 +46,15 @@ public class ClienteService {
 
         validarAcesso(cliente);
 
-        com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
+        com.empresa.comissao.domain.enums.TipoPessoa tipo = request.getTipoPessoa() != null
+                ? request.getTipoPessoa()
+                : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
+
+        if (tipo == com.empresa.comissao.domain.enums.TipoPessoa.FISICA) {
+            com.empresa.comissao.validation.ValidadorDocumento.validarCpf(request.getCpf());
+        } else {
+            com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
+        }
 
         updateEntity(cliente, request);
         cliente = clienteRepository.save(cliente);
@@ -89,6 +105,9 @@ public class ClienteService {
         c.setRazaoSocial(r.getRazaoSocial());
         c.setNomeFantasia(r.getNomeFantasia());
         c.setCnpj(r.getCnpj());
+        c.setCpf(r.getCpf());
+        c.setTipoPessoa(
+                r.getTipoPessoa() != null ? r.getTipoPessoa() : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA);
         c.setEmail(r.getEmail());
         c.setContato(r.getContato());
         if (r.getStatus() != null)
@@ -111,7 +130,10 @@ public class ClienteService {
                 .id(c.getId())
                 .razaoSocial(c.getRazaoSocial())
                 .nomeFantasia(c.getNomeFantasia())
+                .nomeFantasia(c.getNomeFantasia())
                 .cnpj(c.getCnpj())
+                .cpf(c.getCpf())
+                .tipoPessoa(c.getTipoPessoa())
                 .contato(c.getContato())
                 .email(c.getEmail())
                 .status(c.getStatus())

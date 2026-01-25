@@ -284,6 +284,52 @@ public class FinanceiroService {
     }
 
     /**
+     * Cria conta a pagar JÁ PAGA para saldo de comissão.
+     * Usado quando o usuário quita a comissão diretamente ('Apenas Marcar como
+     * Pago').
+     */
+    @Transactional
+    public ContaPagar criarContaPagarComissaoQuitada(
+            com.empresa.comissao.domain.entity.ComissaoCalculada comissao,
+            Empresa empresa) {
+
+        log.info("💸 Criando conta a pagar QUITADA para comissão ID: {}", comissao.getId());
+
+        String nomeUsuario = comissao.getUsuario() != null ? comissao.getUsuario().getUsername()
+                : (empresa != null ? empresa.getNome() : "GLOBAL");
+
+        String descricao = String.format("Comissão %s - Ref: %s (Quitada)",
+                nomeUsuario,
+                comissao.getAnoMesReferencia().toString());
+
+        ContaPagar conta = ContaPagar.builder()
+                .empresa(empresa)
+                .funcionario(comissao.getUsuario())
+                .descricao(descricao)
+                .valor(comissao.getSaldoAReceber()) // Valor Líquido
+                .dataCompetencia(comissao.getAnoMesReferencia().atEndOfMonth())
+                .dataVencimento(LocalDate.now()) // Vence hoje (pois foi pago hoje)
+                .dataPagamento(LocalDate.now()) // Pago hoje
+                .status(StatusConta.PAGO)
+                .tipo(TipoContaPagar.COMISSAO_FUNCIONARIO)
+                .meioPagamento(MeioPagamento.OUTROS) // Default, pois não sabemos o meio exato na quitação simples
+                .comissao(comissao) // VINCULAÇÃO IMPORTANTE
+                .build();
+
+        ContaPagar salva = contaPagarRepository.save(conta);
+        log.info("✅ Conta a pagar (PAGA) ID {} criada para comissão", salva.getId());
+        return salva;
+    }
+
+    /**
+     * Busca conta a pagar associada a uma comissão.
+     */
+    public java.util.Optional<ContaPagar> buscarContaPagarPorComissao(
+            com.empresa.comissao.domain.entity.ComissaoCalculada comissao) {
+        return contaPagarRepository.findFirstByComissao(comissao);
+    }
+
+    /**
      * Cria conta a pagar para distribuição de lucros (dividendos).
      * IMPORTANTE: Sempre cria como PENDENTE. Tipo é fixo e não editável.
      * NÃO afeta DRE, apenas fluxo de caixa.

@@ -10,6 +10,8 @@ public class ClienteResponse {
     private String razaoSocial;
     private String nomeFantasia;
     private String cnpj;
+    private String cpf;
+    private com.empresa.comissao.domain.enums.TipoPessoa tipoPessoa;
     private String contato;
     private String email;
     private com.empresa.comissao.domain.enums.StatusCliente status;

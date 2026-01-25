@@ -52,29 +52,41 @@ public class FaturaService {
         log.info("📄 Buscando fatura: {} - {} (Despesa: {}, Fechamento dia: {})",
                 cartao.getNome(), mesReferencia, dataDespesa, diaFechamento);
 
-        // Buscar fatura existente
-        ContaPagar faturaExistente = contaPagarRepository
-                .findByCartaoAndMesReferenciaAndTipo(cartao, mesReferencia, TipoContaPagar.FATURA_CARTAO)
+        // Buscar TODAS as faturas deste mês (pode ter mais de uma se houve pagamento
+        // antecipado)
+        List<ContaPagar> faturasDoMes = contaPagarRepository
+                .findByCartaoAndMesReferenciaAndTipo(cartao, mesReferencia, TipoContaPagar.FATURA_CARTAO);
+
+        // Tenta encontrar uma fatura ABERTA (PENDENTE)
+        ContaPagar faturaAberta = faturasDoMes.stream()
+                .filter(f -> f.getStatus() == StatusConta.PENDENTE)
+                .findFirst()
                 .orElse(null);
 
-        if (faturaExistente != null) {
-            // Validar se fatura já foi paga
-            if (faturaExistente.getStatus() == StatusConta.PAGO) {
-                throw new BusinessException(
-                        "Fatura de " + mesReferencia + " já foi paga. Não é possível adicionar despesas.");
-            }
-            log.info("📄 Fatura existente encontrada: ID {}", faturaExistente.getId());
-            return faturaExistente;
+        if (faturaAberta != null) {
+            log.info("📄 Fatura aberta encontrada: ID {}", faturaAberta.getId());
+            return faturaAberta;
         }
 
-        // Criar nova fatura
-        LocalDate dataVencimento = calcularDataVencimento(cartao, dataDespesa);
+        // Se não tem fatura aberta (ou não existe nenhuma, ou todas estão PAGAS), cria
+        // uma nova
+        // Isso permite continuar lançando despesas no mês mesmo após pagar a fatura
+        // parcial/antecipada
+
+        log.info("📄 Nenhuma fatura aberta encontrada para {}. Criando nova fatura (Complementar se houver pagas).",
+                mesReferencia);
+
+        LocalDate dataVencimento = calcularDataVencimento(cartao, mesFatura);
+
+        // Data de competência = Dia do fechamento no mês de referência
+        int diaFechamentoComp = cartao.getDiaFechamento() != null ? cartao.getDiaFechamento() : 25;
+        LocalDate dataCompetencia = mesFatura.atDay(Math.min(diaFechamentoComp, mesFatura.lengthOfMonth()));
 
         ContaPagar novaFatura = ContaPagar.builder()
                 .empresa(cartao.getEmpresa())
                 .descricao("Fatura " + cartao.getNome() + " - " + mesReferencia)
                 .valor(BigDecimal.ZERO) // Será atualizado
-                .dataCompetencia(dataDespesa.withDayOfMonth(1))
+                .dataCompetencia(dataCompetencia)
                 .dataVencimento(dataVencimento)
                 .status(StatusConta.PENDENTE)
                 .tipo(TipoContaPagar.FATURA_CARTAO)
@@ -83,12 +95,14 @@ public class FaturaService {
                 .build();
 
         ContaPagar salva = contaPagarRepository.save(novaFatura);
-        log.info("📄 Nova fatura criada: ID {} | Vencimento: {}", salva.getId(), dataVencimento);
+        log.info("📄 Nova fatura criada: ID {} | Ref: {} | Vencimento: {}",
+                salva.getId(), mesReferencia, dataVencimento);
         return salva;
     }
 
     /**
      * Atualiza o valor da fatura somando todas as despesas do cartão no mês.
+     * Leva em consideração valores já pagos em outras faturas do mesmo mês.
      */
     @Transactional
     public void atualizarValorFatura(ContaPagar fatura) {
@@ -97,31 +111,55 @@ public class FaturaService {
             return;
         }
 
-        // Buscar todas as despesas do cartão no mês
+        // 1. Calcular o TOTAL de despesas do mês inteiro
         YearMonth ym = YearMonth.parse(fatura.getMesReferencia(), MES_FORMATTER);
         LocalDate inicio = ym.atDay(1);
         LocalDate fim = ym.atEndOfMonth();
 
-        BigDecimal total = despesaRepository.sumByCartaoAndPeriodo(
+        BigDecimal totalDespesas = despesaRepository.sumByCartaoAndPeriodo(
                 fatura.getCartao(), inicio, fim);
 
-        if (total == null) {
-            total = BigDecimal.ZERO;
+        if (totalDespesas == null) {
+            totalDespesas = BigDecimal.ZERO;
         }
 
-        fatura.setValor(total);
+        // 2. Calcular o TOTAL já pago em faturas FECHADAS/PAGAS deste mesmo mês
+        BigDecimal totalJaPago = contaPagarRepository.sumValorPagoByCartaoAndMes(
+                fatura.getCartao(), fatura.getMesReferencia(), StatusConta.PAGO);
+
+        if (totalJaPago == null) {
+            totalJaPago = BigDecimal.ZERO;
+        }
+
+        // 3. O valor desta fatura deve ser o saldo restante
+        // Se houver outras faturas PENDENTES no mesmo mês (o que seria estranho, mas
+        // possível em concorrência),
+        // este cálculo assume que esta é a única pendente que está sendo ajustada.
+        // O ideal é subtrair também o valor de OUTRAS faturas pendentes, mas vamos
+        // assumir fluxo sequencial.
+
+        BigDecimal saldoRestante = totalDespesas.subtract(totalJaPago);
+
+        if (saldoRestante.compareTo(BigDecimal.ZERO) < 0) {
+            log.warn("⚠️ Saldo restante negativo para fatura {}: R$ {}. Pagou a mais?", fatura.getId(), saldoRestante);
+            saldoRestante = BigDecimal.ZERO;
+        }
+
+        fatura.setValor(saldoRestante);
         contaPagarRepository.save(fatura);
-        log.info("📄 Fatura atualizada: ID {} | Novo valor: R$ {}", fatura.getId(), total);
+        log.info("📄 Fatura {} atualizada. Total Despesas: R$ {}, Já Pago: R$ {}, Novo Valor: R$ {}",
+                fatura.getId(), totalDespesas, totalJaPago, saldoRestante);
     }
 
     /**
      * Calcula a data de vencimento da fatura.
-     * Regra: dia do vencimento no mês seguinte.
+     * Regra: dia do vencimento no mês seguinte ao mês de referência da fatura.
      */
-    private LocalDate calcularDataVencimento(CartaoCredito cartao, LocalDate dataDespesa) {
-        YearMonth mesSeguinte = YearMonth.from(dataDespesa).plusMonths(1);
-        int dia = Math.min(cartao.getDiaVencimento(), mesSeguinte.lengthOfMonth());
-        return mesSeguinte.atDay(dia);
+    private LocalDate calcularDataVencimento(CartaoCredito cartao, YearMonth mesReferenciaFatura) {
+        // Se a fatura é de Janeiro, vence em Fevereiro
+        YearMonth mesVencimento = mesReferenciaFatura.plusMonths(1);
+        int dia = Math.min(cartao.getDiaVencimento(), mesVencimento.lengthOfMonth());
+        return mesVencimento.atDay(dia);
     }
 
     /**
@@ -130,5 +168,43 @@ public class FaturaService {
     public List<ContaPagar> listarFaturas(Empresa empresa) {
         return contaPagarRepository.findByEmpresaAndTipoOrderByDataVencimentoDesc(
                 empresa, TipoContaPagar.FATURA_CARTAO);
+    }
+
+    /**
+     * Calcula o limite disponível do cartão.
+     * Limite disponível = Limite total - Soma das faturas PENDENTES
+     */
+    public BigDecimal calcularLimiteDisponivel(CartaoCredito cartao) {
+        if (cartao.getLimite() == null) {
+            return null; // Sem limite definido
+        }
+
+        BigDecimal totalPendente = contaPagarRepository
+                .sumValorByCartaoAndStatus(cartao, StatusConta.PENDENTE);
+
+        if (totalPendente == null) {
+            totalPendente = BigDecimal.ZERO;
+        }
+
+        return cartao.getLimite().subtract(totalPendente);
+    }
+
+    /**
+     * Verifica se há limite disponível para uma nova despesa.
+     * 
+     * @throws BusinessException se o limite for insuficiente
+     */
+    public void validarLimiteDisponivel(CartaoCredito cartao, BigDecimal valorDespesa) {
+        if (cartao.getLimite() == null) {
+            return; // Sem limite definido = sem restrição
+        }
+
+        BigDecimal limiteDisponivel = calcularLimiteDisponivel(cartao);
+
+        if (valorDespesa.compareTo(limiteDisponivel) > 0) {
+            throw new BusinessException(String.format(
+                    "Limite insuficiente. Disponivel: R$ %.2f, Necessario: R$ %.2f",
+                    limiteDisponivel, valorDespesa));
+        }
     }
 }

@@ -44,6 +44,7 @@ public class ComissaoService {
         private final RegraComissaoRepository regraComissaoRepository;
         private final com.empresa.comissao.repository.ContaReceberRepository contaReceberRepository;
         private final com.empresa.comissao.repository.UserRepository userRepository;
+        private final com.empresa.comissao.repository.ContaPagarRepository contaPagarRepository;
 
         @org.springframework.beans.factory.annotation.Autowired
         @org.springframework.context.annotation.Lazy
@@ -458,12 +459,39 @@ public class ComissaoService {
                                         "Esta comissão já foi quitada em " + comissao.getDataQuitacao());
                 }
 
+                // INTEGRACAO FINANCEIRO: Garantir que existe conta paga
+                try {
+                        java.util.Optional<com.empresa.comissao.domain.entity.ContaPagar> contaOpt = financeiroService
+                                        .buscarContaPagarPorComissao(comissao);
+
+                        if (contaOpt.isPresent()) {
+                                com.empresa.comissao.domain.entity.ContaPagar conta = contaOpt.get();
+                                if (conta.getStatus() != com.empresa.comissao.domain.enums.StatusConta.PAGO) {
+                                        log.info("🔄 Conta a pagar existente encontrada (ID: {}). Quitando-a...",
+                                                        conta.getId());
+                                        financeiroService.pagarConta(conta.getId(), LocalDate.now(),
+                                                        com.empresa.comissao.domain.enums.MeioPagamento.OUTROS);
+                                } else {
+                                        log.info("ℹ️ Conta a pagar associada já está PAGA (ID: {}).", conta.getId());
+                                }
+                        } else {
+                                log.info("🆕 Nenhuma conta a pagar encontrada. Criando registro financeiro PAGO...");
+                                financeiroService.criarContaPagarComissaoQuitada(comissao,
+                                                comissao.getUsuario() != null ? comissao.getUsuario().getEmpresa()
+                                                                : comissao.getEmpresa());
+                        }
+                } catch (Exception e) {
+                        log.error("❌ Erro ao integrar com financeiro na quitação de comissão: {}", e.getMessage(), e);
+                        // Dependendo da regra de negócio, poderíamos lançar exceção e impedir quitação.
+                        // Por segurança financeira, vamos impedir.
+                        throw new com.empresa.comissao.exception.BusinessException(
+                                        "Erro ao registrar pagamento no financeiro: " + e.getMessage());
+                }
+
                 comissao.setQuitado(true);
                 comissao.setDataQuitacao(java.time.LocalDateTime.now());
                 comissao.setValorQuitado(comissao.getSaldoAReceber());
 
-                comissaoCalculadaRepository.save(comissao);
-                log.info("✅ Comissão {} quitada com sucesso. Valor: {}", comissaoId, comissao.getValorQuitado());
                 comissaoCalculadaRepository.save(comissao);
                 log.info("✅ Comissão {} quitada com sucesso. Valor: {}", comissaoId, comissao.getValorQuitado());
         }
@@ -618,7 +646,24 @@ public class ComissaoService {
                         log.info("📊 Relatório usando modo COLETIVA para empresa: {}", empresaFresh.getNome());
                         comissao = calcularComissaoEmpresaMensal(ano, mes, empresaFresh);
                 } else {
-                        comissao = calcularEObterComissaoMensal(ano, mes, usuario);
+                        // Modo Individual
+                        if (usuario != null && !usuario.isParticipaComissao()) {
+                                log.info("ℹ️ Usuário {} não participa de comissão. Retornando base zerada para relatório.",
+                                                usuario.getEmail());
+                                comissao = ComissaoCalculada.builder()
+                                                .faturamentoMensalTotal(BigDecimal.ZERO)
+                                                .valorBrutoComissao(BigDecimal.ZERO)
+                                                .saldoAReceber(BigDecimal.ZERO)
+                                                .valorTotalAdiantamentos(BigDecimal.ZERO)
+                                                .build();
+
+                                // Se for relatório financeiro (DRE), talvez devêssemos mostrar o faturamento
+                                // GLOBAL
+                                // mesmo no modo INDIVIDUAL, se for ADMIN?
+                                // Por enquanto, zero evita o crash.
+                        } else {
+                                comissao = calcularEObterComissaoMensal(ano, mes, usuario);
+                        }
                 }
                 BigDecimal faturamentoTotal = comissao.getFaturamentoMensalTotal();
 
@@ -635,28 +680,93 @@ public class ComissaoService {
                 // 3. Obter Despesas por Categoria e Total
                 Map<CategoriaDespesa, BigDecimal> despesasPorCategoria = new EnumMap<>(CategoriaDespesa.class);
 
-                // Inicializa o mapa com zero para todas as categorias para garantir que o front
-                // receba uma estrutura completa
+                // Inicializa o mapa com zero
                 for (CategoriaDespesa cat : CategoriaDespesa.values()) {
                         despesasPorCategoria.put(cat, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 }
 
-                despesaRepository.sumValorByCategoriaAndDataDespesaBetween(inicioDoMes, fimDoMes)
-                                .forEach(row -> {
-                                        if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
-                                                CategoriaDespesa cat = (CategoriaDespesa) row[0];
-                                                BigDecimal val = (BigDecimal) row[1];
+                // CAIXA 2.0: Lógica de Rateio Proporcional
+                // Se Total Despesas Mês = 600, mas Faturas Pagas = 500.
+                // Então consideramos 83% de cada despesa.
 
-                                                // ⛔ DRE FILTER: Tax is calculated (Competence), not expense (Cash)
-                                                // We ignore "IMPOSTOS" category here to avoid double counting
-                                                // or conceptual mixing. Tax line is separate.
-                                                if (cat != CategoriaDespesa.IMPOSTOS) {
-                                                        despesasPorCategoria.put(cat,
-                                                                        val.setScale(2, RoundingMode.HALF_UP));
+                // A. Mapa de Pagamentos (Numerador)
+                Map<String, BigDecimal> pagamentosMap = new java.util.HashMap<>();
+                if (empresaFresh != null) {
+                        contaPagarRepository.findByEmpresaAndTipoAndStatus(
+                                        empresaFresh,
+                                        com.empresa.comissao.domain.enums.TipoContaPagar.FATURA_CARTAO,
+                                        com.empresa.comissao.domain.enums.StatusConta.PAGO).forEach(f -> {
+                                                if (f.getCartao() != null && f.getMesReferencia() != null) {
+                                                        String key = f.getCartao().getId() + "-" + f.getMesReferencia();
+                                                        pagamentosMap.merge(key, f.getValor(), BigDecimal::add);
                                                 }
-                                        }
-                                });
+                                        });
+                }
 
+                // Buscar despesas raw
+                List<Despesa> despesasRaw;
+                if (empresaFresh != null) {
+                        despesasRaw = despesaRepository.findByEmpresaAndDataDespesaBetween(empresaFresh, inicioDoMes,
+                                        fimDoMes);
+
+                } else {
+                        despesasRaw = despesaRepository.findByDataDespesaBetween(inicioDoMes, fimDoMes);
+                }
+
+                // B. Mapa de Total Despesas (Denominador)
+                Map<String, BigDecimal> totalDespesasMap = new java.util.HashMap<>();
+                for (Despesa d : despesasRaw) {
+                        if (d.getCartao() != null) {
+                                int diaFechamento = d.getCartao().getDiaFechamento() != null
+                                                ? d.getCartao().getDiaFechamento()
+                                                : 25;
+                                YearMonth mesRef = YearMonth.from(d.getDataDespesa());
+                                if (d.getDataDespesa().getDayOfMonth() > diaFechamento) {
+                                        mesRef = mesRef.plusMonths(1);
+                                }
+                                String key = d.getCartao().getId() + "-" + mesRef.toString();
+                                totalDespesasMap.merge(key, d.getValor(), BigDecimal::add);
+                        }
+                }
+
+                // C. Rateio e Agregação
+                for (Despesa d : despesasRaw) {
+                        BigDecimal valorFinal = d.getValor();
+
+                        // Se for cartão, aplica o FATOR DE PAGAMENTO
+                        if (d.getCartao() != null) {
+                                int diaFechamento = d.getCartao().getDiaFechamento() != null
+                                                ? d.getCartao().getDiaFechamento()
+                                                : 25;
+                                YearMonth mesRef = YearMonth.from(d.getDataDespesa());
+                                if (d.getDataDespesa().getDayOfMonth() > diaFechamento) {
+                                        mesRef = mesRef.plusMonths(1);
+                                }
+                                String key = d.getCartao().getId() + "-" + mesRef.toString();
+
+                                BigDecimal totalDespesas = totalDespesasMap.getOrDefault(key, BigDecimal.ZERO);
+                                BigDecimal totalPago = pagamentosMap.getOrDefault(key, BigDecimal.ZERO);
+
+                                if (totalDespesas.compareTo(BigDecimal.ZERO) > 0) {
+                                        // Fator = Pago / Total
+                                        BigDecimal fator = totalPago.divide(totalDespesas, 10, RoundingMode.HALF_UP);
+                                        // Cap in 1.0 (não inflar se pagou a mais/juros)
+                                        if (fator.compareTo(BigDecimal.ONE) > 0)
+                                                fator = BigDecimal.ONE;
+
+                                        valorFinal = d.getValor().multiply(fator);
+                                } else {
+                                        valorFinal = BigDecimal.ZERO;
+                                }
+                        }
+
+                        if (d.getCategoria() != CategoriaDespesa.IMPOSTOS) {
+                                BigDecimal current = despesasPorCategoria.getOrDefault(d.getCategoria(),
+                                                BigDecimal.ZERO);
+                                despesasPorCategoria.put(d.getCategoria(),
+                                                current.add(valorFinal).setScale(2, RoundingMode.HALF_UP));
+                        }
+                }
                 // Sum only valid operational expenses (excluding taxes)
                 BigDecimal despesasTotal = despesasPorCategoria.values().stream()
                                 .reduce(BigDecimal.ZERO, BigDecimal::add)
