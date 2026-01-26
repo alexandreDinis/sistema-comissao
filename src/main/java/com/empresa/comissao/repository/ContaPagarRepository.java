@@ -114,4 +114,36 @@ public interface ContaPagarRepository extends JpaRepository<ContaPagar, Long> {
         BigDecimal sumValorByCartaoAndStatus(
                         @Param("cartao") com.empresa.comissao.domain.entity.CartaoCredito cartao,
                         @Param("status") StatusConta status);
+
+        // Soma por período (pagamento - caixa)
+        @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaPagar c " +
+                        "WHERE c.empresa = :empresa AND c.dataPagamento < :data AND c.status = 'PAGO'")
+        BigDecimal sumByPagamentoBefore(
+                        @Param("empresa") Empresa empresa,
+                        @Param("data") LocalDate data);
+
+        // Soma por tipo e vencimento (para Distribuição de Lucros acumulada)
+        @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaPagar c " +
+                        "WHERE c.empresa = :empresa AND c.tipo = :tipo AND c.dataVencimento BETWEEN :inicio AND :fim")
+        BigDecimal sumByTipoAndVencimentoBetween(
+                        @Param("empresa") Empresa empresa,
+                        @Param("tipo") com.empresa.comissao.domain.enums.TipoContaPagar tipo,
+                        @Param("inicio") LocalDate inicio,
+                        @Param("fim") LocalDate fim);
+
+        // Buscar pagas por período (para relatório Contas a Pagar - Pagas)
+        @Query("SELECT c FROM ContaPagar c WHERE c.empresa = :empresa " +
+                        "AND c.dataPagamento BETWEEN :inicio AND :fim AND c.status = 'PAGO' ORDER BY c.dataPagamento")
+        List<ContaPagar> findPagasBetween(
+                        @Param("empresa") Empresa empresa,
+                        @Param("inicio") LocalDate inicio,
+                        @Param("fim") LocalDate fim);
+
+        // Buscar por tipo e status e período de vencimento (para Distribuição de
+        // Lucros)
+        List<ContaPagar> findByEmpresaAndTipoAndDataVencimentoBetweenOrderByDataVencimentoDesc(
+                        Empresa empresa,
+                        com.empresa.comissao.domain.enums.TipoContaPagar tipo,
+                        LocalDate inicio,
+                        LocalDate fim);
 }

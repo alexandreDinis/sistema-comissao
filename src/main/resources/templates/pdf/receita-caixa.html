@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8" />
+    <style th:replace="~{pdf/fluxo-caixa :: style}"></style>
+    <style>
+        table.list {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 8pt;
+        }
+
+        table.list th {
+            background: #effcf1;
+            color: #0f5132;
+            padding: 5px;
+            text-align: left;
+            border-bottom: 2px solid #28a745;
+        }
+
+        table.list td {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="logo-container" th:if="${empresa.hasLogo}">
+            <img th:src="${empresa.logoUrl}" alt="Logo" />
+        </div>
+        <div class="empresa-info">
+            <h1 th:text="${empresa.razaoSocial}">Empresa</h1>
+            <p th:if="${empresa.cnpj}" th:text="'CNPJ: ' + ${empresa.cnpj}"></p>
+        </div>
+    </div>
+
+    <div class="title-section" style="background: linear-gradient(135deg, #0f5132 0%, #198754 100%);">
+        <h2>Receita por Caixa Detalhada</h2>
+        <p>Base para Simples Nacional (DAS)</p>
+        <p style="font-size: 10pt; opacity: 0.8;"
+            th:text="'Período: ' + ${#temporals.format(relatorio.dataInicio, 'dd/MM/yyyy')} + ' a ' + ${#temporals.format(relatorio.dataFim, 'dd/MM/yyyy')}">
+        </p>
+    </div>
+
+    <div class="card" style="margin: 0 auto 30px; width: 50%; border-color: #28a745;">
+        <h3>Total Recebido (Regime de Caixa)</h3>
+        <div class="value" style="color: #28a745;"
+            th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.totalRecebido, 1, 'POINT', 2, 'COMMA')}">R$ 0,00</div>
+    </div>
+
+    <table class="list">
+        <thead>
+            <tr>
+                <th width="15%">Data Rec.</th>
+                <th width="30%">Cliente / Descrição</th>
+                <th width="15%">Origem</th>
+                <th width="20%">Meio Pagto</th>
+                <th width="20%" style="text-align: right;">Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="item : ${relatorio.itens}">
+                <td th:text="${#temporals.format(item.dataRecebimento, 'dd/MM/yyyy')}">01/01/2026</td>
+                <td>
+                    <div style="font-weight: bold;" th:text="${item.cliente}">Cliente</div>
+                    <div style="font-size: 7pt; color: #666;" th:text="${item.descricao}">Desc</div>
+                </td>
+                <td th:text="${item.origem}">OS #123</td>
+                <td th:text="${item.meioPagamento}">PIX</td>
+                <td style="text-align: right; font-weight: bold;"
+                    th:text="'R$ ' + ${#numbers.formatDecimal(item.valor, 1, 'POINT', 2, 'COMMA')}">0,00</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <p
+            th:text="'Gerado em: ' + ${#temporals.format(dataGeracao, 'dd/MM/yyyy HH:mm')} + ' - Relatório base para apuração de impostos'">
+        </p>
+    </div>
+</body>
+
+</html>

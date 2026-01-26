@@ -27,7 +27,8 @@ public class ComissaoController {
     @PreAuthorize("hasAnyRole('USER', 'ADMIN', 'ADMIN_EMPRESA', 'FUNCIONARIO')")
     public ResponseEntity<ComissaoResponse> obterComissaoMensal(
             @PathVariable int ano,
-            @PathVariable int mes) {
+            @PathVariable int mes,
+            @RequestParam(required = false, defaultValue = "false") boolean force) {
 
         org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication();
@@ -50,14 +51,14 @@ public class ComissaoController {
 
             if (modo == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
                 // Company-wide: all employees see total empresa data
-                comissao = comissaoService.calcularComissaoEmpresaMensal(ano, mes, empresaFresh);
+                comissao = comissaoService.calcularComissaoEmpresaMensal(ano, mes, empresaFresh, force);
             } else {
                 // Individual: each employee sees only their own data
-                comissao = comissaoService.calcularEObterComissaoMensal(ano, mes, usuario);
+                comissao = comissaoService.calcularEObterComissaoMensal(ano, mes, usuario, force);
             }
         } else {
             // Fallback for users without empresa (shouldn't happen in normal flow)
-            comissao = comissaoService.calcularEObterComissaoMensal(ano, mes, usuario);
+            comissao = comissaoService.calcularEObterComissaoMensal(ano, mes, usuario, force);
         }
 
         ComissaoResponse response = new ComissaoResponse(

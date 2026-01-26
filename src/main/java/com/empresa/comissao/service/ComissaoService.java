@@ -203,19 +203,26 @@ public class ComissaoService {
                                                                                                 4, RoundingMode.HALF_UP)
                                                                                 : BigDecimal.ZERO;
                                                                 // Fallback: generate description if null
+                                                                String minStr = String.format("%,.2f",
+                                                                                fc.getMinFaturamento());
+                                                                String maxStr = fc.getMaxFaturamento() != null
+                                                                                ? String.format("%,.2f",
+                                                                                                fc.getMaxFaturamento())
+                                                                                : "∞";
+                                                                String rangeStr = "R$ " + minStr + " até R$ " + maxStr;
+
+                                                                log.info("🔍 [DEBUG FAIXA] Calculando Faixa: Min={}, Max={}, Nome={}",
+                                                                                minStr, maxStr, fc.getDescricao());
+
                                                                 if (fc.getDescricao() != null
                                                                                 && !fc.getDescricao().isBlank()) {
-                                                                        faixaDescricao = fc.getDescricao();
+                                                                        faixaDescricao = rangeStr + " ("
+                                                                                        + fc.getDescricao() + ")";
                                                                 } else {
-                                                                        String minStr = String.format("%,.2f",
-                                                                                        fc.getMinFaturamento());
-                                                                        String maxStr = fc.getMaxFaturamento() != null
-                                                                                        ? String.format("%,.2f", fc
-                                                                                                        .getMaxFaturamento())
-                                                                                        : "∞";
-                                                                        faixaDescricao = "R$ " + minStr + " até R$ "
-                                                                                        + maxStr;
+                                                                        faixaDescricao = rangeStr;
                                                                 }
+                                                                log.info("✅ [DEBUG FAIXA] Descrição Final Gerada: {}",
+                                                                                faixaDescricao);
                                                                 break;
                                                         }
                                                 }
@@ -384,17 +391,23 @@ public class ComissaoService {
                                                                                         RoundingMode.HALF_UP)
                                                                         : BigDecimal.ZERO;
                                                         // Fallback: generate description if null
+                                                        String minStr = String.format("%,.2f", fc.getMinFaturamento());
+                                                        String maxStr = fc.getMaxFaturamento() != null
+                                                                        ? String.format("%,.2f", fc.getMaxFaturamento())
+                                                                        : "∞";
+                                                        String rangeStr = "R$ " + minStr + " até R$ " + maxStr;
+
+                                                        log.info("🔍 [DEBUG FAIXA EMPRESA] Calculando: Min={}, Max={}, Nome={}",
+                                                                        minStr, maxStr, fc.getDescricao());
+
                                                         if (fc.getDescricao() != null && !fc.getDescricao().isBlank()) {
-                                                                faixaDescricao = fc.getDescricao();
+                                                                faixaDescricao = rangeStr + " (" + fc.getDescricao()
+                                                                                + ")";
                                                         } else {
-                                                                String minStr = String.format("%,.2f",
-                                                                                fc.getMinFaturamento());
-                                                                String maxStr = fc.getMaxFaturamento() != null
-                                                                                ? String.format("%,.2f",
-                                                                                                fc.getMaxFaturamento())
-                                                                                : "∞";
-                                                                faixaDescricao = "R$ " + minStr + " até R$ " + maxStr;
+                                                                faixaDescricao = rangeStr;
                                                         }
+                                                        log.info("✅ [DEBUG FAIXA EMPRESA] Descrição Final: {}",
+                                                                        faixaDescricao);
                                                         break;
                                                 }
                                         }
@@ -760,14 +773,18 @@ public class ComissaoService {
                                 }
                         }
 
-                        if (d.getCategoria() != CategoriaDespesa.IMPOSTOS) {
+                        // DRE REFACTOR: Exclude Non-Operational or Already Calculated items
+                        boolean isExcluded = d.getCategoria() == CategoriaDespesa.IMPOSTOS_SOBRE_VENDA ||
+                                        d.getCategoria() == CategoriaDespesa.PROLABORE;
+
+                        if (!isExcluded) {
                                 BigDecimal current = despesasPorCategoria.getOrDefault(d.getCategoria(),
                                                 BigDecimal.ZERO);
                                 despesasPorCategoria.put(d.getCategoria(),
                                                 current.add(valorFinal).setScale(2, RoundingMode.HALF_UP));
                         }
                 }
-                // Sum only valid operational expenses (excluding taxes)
+                // Sum only valid operational expenses (excluding taxes and prolabore)
                 BigDecimal despesasTotal = despesasPorCategoria.values().stream()
                                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                                 .setScale(2, RoundingMode.HALF_UP);

@@ -18,6 +18,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 
 @RestController
 @RequestMapping("/api/v1/platform")
@@ -100,6 +103,53 @@ public class PlatformController {
         return ResponseEntity.ok(empresaRepository.save(empresa));
     }
 
+    @PutMapping("/tenants/{id}")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE')")
+    @Transactional
+    public ResponseEntity<Empresa> updateTenant(@PathVariable Long id, @RequestBody UpdateTenantRequest request) {
+        var empresa = empresaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        // 1. Update Basic Info
+        empresa.setNome(request.getNome());
+        empresa.setCnpj(request.getCnpj());
+
+        // 2. Handle Plan Change
+        if (request.getPlano() != null && request.getPlano() != empresa.getPlano()) {
+            log.info("🔄 Alterando plano da empresa {} de {} para {}", empresa.getNome(), empresa.getPlano(),
+                    request.getPlano());
+            empresa.setPlano(request.getPlano());
+
+            // Recalculate features
+            List<Plano> eligiblePlans = java.util.Arrays.stream(Plano.values())
+                    .filter(p -> p.ordinal() <= request.getPlano().ordinal())
+                    .toList();
+            List<Feature> availableFeatures = featureRepository.findByPlanoMinimoIn(eligiblePlans);
+
+            // Update Admin Features
+            List<User> admins = userRepository.findByEmpresaAndRole(empresa, Role.ADMIN_EMPRESA);
+            for (User admin : admins) {
+                admin.setFeatures(new HashSet<>(availableFeatures));
+                userRepository.save(admin);
+                log.info("✅ Features atualizadas para admin: {}", admin.getEmail());
+            }
+        }
+
+        // 3. Update Admin Email (Optional - usually just updates the first admin found)
+        if (request.getAdminEmail() != null && !request.getAdminEmail().isBlank()) {
+            List<User> admins = userRepository.findByEmpresaAndRole(empresa, Role.ADMIN_EMPRESA);
+            if (!admins.isEmpty()) {
+                User mainAdmin = admins.get(0);
+                if (!mainAdmin.getEmail().equals(request.getAdminEmail())) {
+                    mainAdmin.setEmail(request.getAdminEmail());
+                    userRepository.save(mainAdmin);
+                }
+            }
+        }
+
+        return ResponseEntity.ok(empresaRepository.save(empresa));
+    }
+
     @Data
     @lombok.Builder
     static class PlatformStats {
@@ -127,5 +177,13 @@ public class PlatformController {
         private Plano plano;
         private String adminEmail;
         private String adminPassword;
+    }
+
+    @Data
+    static class UpdateTenantRequest {
+        private String nome;
+        private String cnpj;
+        private Plano plano;
+        private String adminEmail;
     }
 }

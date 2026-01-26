@@ -6,6 +6,10 @@ import com.empresa.comissao.domain.enums.StatusOrdemServico;
 import com.empresa.comissao.domain.enums.TipoDesconto;
 import com.empresa.comissao.dto.RelatorioAnualDTO;
 import com.empresa.comissao.dto.RelatorioFinanceiroDTO;
+import com.empresa.comissao.dto.RelatorioReceitaCaixaDTO;
+import com.empresa.comissao.dto.RelatorioFluxoCaixaDTO;
+import com.empresa.comissao.dto.RelatorioContasPagarDTO;
+import com.empresa.comissao.dto.RelatorioDistribuicaoLucrosDTO;
 import com.lowagie.text.DocumentException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -116,6 +120,41 @@ public class PdfService {
             return htmlToPdf(htmlContent);
         } catch (Exception e) {
             log.error("Erro ao gerar PDF do relatório financeiro", e);
+            throw new RuntimeException("Erro ao gerar PDF", e);
+        }
+    }
+
+    public byte[] gerarRelatorioReceitaCaixaPdf(RelatorioReceitaCaixaDTO relatorio, Empresa empresa) {
+        return gerarPdfGeneric("pdf/receita-caixa", relatorio, empresa);
+    }
+
+    public byte[] gerarRelatorioFluxoCaixaDetalhadoPdf(RelatorioFluxoCaixaDTO relatorio, Empresa empresa) {
+        return gerarPdfGeneric("pdf/fluxo-caixa-detalhado", relatorio, empresa);
+    }
+
+    public byte[] gerarRelatorioContasPagarPdf(RelatorioContasPagarDTO relatorio, Empresa empresa) {
+        return gerarPdfGeneric("pdf/contas-pagar", relatorio, empresa);
+    }
+
+    public byte[] gerarRelatorioDistribuicaoLucrosPdf(RelatorioDistribuicaoLucrosDTO relatorio, Empresa empresa) {
+        return gerarPdfGeneric("pdf/distribuicao-lucros", relatorio, empresa);
+    }
+
+    // Método genérico para simplificar
+    private byte[] gerarPdfGeneric(String template, Object relatorioObj, Empresa empresa) {
+        try {
+            Context context = new Context(Locale.of("pt", "BR"));
+            context.setVariable("empresa", prepararDadosEmpresa(empresa));
+            context.setVariable("relatorio", relatorioObj);
+            context.setVariable("dataGeracao", LocalDateTime.now());
+
+            String htmlContent = templateEngine.process(template, context);
+            if (htmlContent == null) {
+                throw new RuntimeException("Erro ao processar template " + template);
+            }
+            return htmlToPdf(htmlContent);
+        } catch (Exception e) {
+            log.error("Erro ao gerar PDF " + template, e);
             throw new RuntimeException("Erro ao gerar PDF", e);
         }
     }

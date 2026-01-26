@@ -1,17 +1,16 @@
 package com.empresa.comissao.domain.enums;
 
 /**
- * Tipo de conta a pagar.
+ * Tipo de conta a pagar (Visão Caixa).
  */
 public enum TipoContaPagar {
-    DESPESA_OPERACIONAL, // Alimentação, combustível, etc.
-    COMISSAO_FUNCIONARIO, // Pagamento de comissão
-    ADIANTAMENTO, // Adiantamento a funcionário
-    SALARIO, // Salário fixo
-    FORNECEDOR, // Pagamento a fornecedor
-    IMPOSTO, // Impostos (Legacy/Calculado)
-    IMPOSTO_PAGO, // Pagamento real de impostos (Fluxo de Caixa)
-    DISTRIBUICAO_LUCROS, // Retirada de sócios (Fluxo de Caixa)
-    FATURA_CARTAO, // Fatura de cartão de crédito
+    OPERACIONAL, // Fornecedores, Aluguel, Luz, etc.
+    FOLHA_PAGAMENTO, // Salários, Adiantamentos, Comissões
+    IMPOSTOS, // Pagamento de guias (DAS, DARF)
+    EMPRESTIMOS, // Amortização de empréstimos
+    DISTRIBUICAO_LUCROS, // Retirada de sócios (Dividendos)
+
+    // Legacy / Specific
+    FATURA_CARTAO, // Fatura de cartão (Operational wrapper)
     OUTROS
 }

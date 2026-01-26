@@ -40,7 +40,7 @@ public class DespesaControllerTest {
         dto.setDescricao("Almoço");
         dto.setValor(new BigDecimal("50.00"));
         dto.setDataDespesa(LocalDate.now());
-        dto.setCategoria(com.empresa.comissao.domain.enums.CategoriaDespesa.ALIMENTACAO);
+        dto.setCategoria(com.empresa.comissao.domain.enums.CategoriaDespesa.BENEFICIOS);
 
         Despesa despesa = Despesa.builder()
                 .id(1L)

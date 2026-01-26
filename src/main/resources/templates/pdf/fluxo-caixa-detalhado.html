@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8" />
+    <style th:replace="~{pdf/fluxo-caixa :: style}"></style>
+    <style>
+        /* Paginação automática para evitar cortes */
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+
+        /* Evitar quebras ruins */
+        .summary,
+        .list {
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            page-break-after: avoid;
+        }
+
+        /* PDF Specific overrides */
+        body {
+            font-family: sans-serif;
+        }
+
+        .header {
+            width: 100%;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .logo-container {
+            width: 100px;
+            float: left;
+        }
+
+        .logo-container img {
+            width: 80px;
+            height: auto;
+        }
+
+        .empresa-info {
+            float: left;
+            margin-left: 20px;
+        }
+
+        .empresa-info h1 {
+            margin: 0;
+            font-size: 16pt;
+        }
+
+        .title-section {
+            clear: both;
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .title-section h2 {
+            margin: 0;
+            font-size: 14pt;
+            color: white;
+        }
+
+        .title-section p {
+            margin: 5px 0 0 0;
+            font-size: 10pt;
+            color: #ddd;
+        }
+
+        /* Tables instead of Flexbox */
+        table.summary {
+            width: 100%;
+            margin-bottom: 20px;
+            border-spacing: 10px;
+        }
+
+        table.summary td {
+            vertical-align: top;
+            width: 25%;
+        }
+
+        .card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+
+        .card h3 {
+            margin: 0 0 10px 0;
+            font-size: 10pt;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .card .value {
+            font-size: 14pt;
+            font-weight: bold;
+        }
+
+        table.list {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 9pt;
+        }
+
+        table.list th {
+            background-color: #f0f0f0;
+            padding: 8px;
+            text-align: left;
+            border-bottom: 2px solid #d4af37;
+            font-weight: bold;
+        }
+
+        table.list td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .section-title {
+            color: #d4af37;
+            font-size: 12pt;
+            border-bottom: 1px solid #ddd;
+            margin-top: 30px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+            font-size: 8pt;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <table style="width: 100%;">
+            <tr>
+                <td style="width: 15%;" th:if="${empresa.hasLogo}">
+                    <img th:src="${empresa.logoUrl}" style="width: 80px;" alt="Logo" />
+                </td>
+                <td>
+                    <h1 th:text="${empresa.razaoSocial}" style="margin: 0;">Empresa</h1>
+                    <p th:if="${empresa.cnpj}" th:text="'CNPJ: ' + ${empresa.cnpj}" style="margin: 5px 0 0 0;"></p>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="title-section">
+        <h2>Fluxo de Caixa Mensal Detalhado</h2>
+        <p th:text="${relatorio.periodo}">Janeiro 2026</p>
+    </div>
+
+    <!-- Summary Cards Table -->
+    <table class="summary">
+        <tr>
+            <!-- Saldo Anterior -->
+            <td>
+                <div class="card" style="border-top: 3px solid #666;">
+                    <h3>Saldo Anterior</h3>
+                    <div class="value" style="color: #666;"
+                        th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.saldoInicial, 1, 'POINT', 2, 'COMMA')}">
+                    </div>
+                </div>
+            </td>
+            <!-- Entradas -->
+            <td>
+                <div class="card" style="border-top: 3px solid #28a745;">
+                    <h3>(+) Entradas</h3>
+                    <div class="value" style="color: #28a745;"
+                        th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.totalEntradas, 1, 'POINT', 2, 'COMMA')}">
+                    </div>
+                </div>
+            </td>
+            <!-- Saídas -->
+            <td>
+                <div class="card" style="border-top: 3px solid #dc3545;">
+                    <h3>(-) Saídas</h3>
+                    <div class="value" style="color: #dc3545;"
+                        th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.totalSaidas, 1, 'POINT', 2, 'COMMA')}">
+                    </div>
+                </div>
+            </td>
+            <!-- Saldo Final -->
+            <td>
+                <div class="card" style="border-top: 3px solid #d4af37;">
+                    <h3>(=) Saldo Final</h3>
+                    <div class="value" style="color: #d4af37;"
+                        th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.saldoFinal, 1, 'POINT', 2, 'COMMA')}"></div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="section-title">DETALHAMENTO DE ENTRADAS</div>
+    <table class="list">
+        <thead>
+            <tr>
+                <th width="15%">Data</th>
+                <th width="40%">Descrição</th>
+                <th width="25%">Categoria</th>
+                <th width="20%" style="text-align: right;">Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="item : ${relatorio.entradas}">
+                <td th:text="${#temporals.format(item.data, 'dd/MM/yyyy')}">01/01/2026</td>
+                <td th:text="${item.descricao}">Desc</td>
+                <td th:text="${item.categoria}">Cat</td>
+                <td style="text-align: right; color: #28a745;"
+                    th:text="'R$ ' + ${#numbers.formatDecimal(item.valor, 1, 'POINT', 2, 'COMMA')}">0,00</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(relatorio.entradas)}">
+                <td colspan="4" style="text-align: center; color: #999; padding: 15px;">Nenhuma entrada registrada no
+                    período.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="section-title">DETALHAMENTO DE SAÍDAS</div>
+    <table class="list">
+        <thead>
+            <tr>
+                <th width="15%">Data</th>
+                <th width="40%">Descrição</th>
+                <th width="25%">Categoria</th>
+                <th width="20%" style="text-align: right;">Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="item : ${relatorio.saidas}">
+                <td th:text="${#temporals.format(item.data, 'dd/MM/yyyy')}">01/01/2026</td>
+                <td th:text="${item.descricao}">Desc</td>
+                <td th:text="${item.categoria}">Cat</td>
+                <td style="text-align: right; color: #dc3545;"
+                    th:text="'R$ ' + ${#numbers.formatDecimal(item.valor, 1, 'POINT', 2, 'COMMA')}">0,00</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(relatorio.saidas)}">
+                <td colspan="4" style="text-align: center; color: #999; padding: 15px;">Nenhuma saída registrada no
+                    período.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <p
+            th:text="'Gerado em: ' + ${#temporals.format(dataGeracao, 'dd/MM/yyyy HH:mm')} + ' - Documento Conferência Interna'">
+        </p>
+    </div>
+</body>
+
+</html>

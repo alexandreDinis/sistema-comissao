@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8" />
+    <style th:replace="~{pdf/fluxo-caixa :: style}"></style>
+    <style>
+        /* PDF Specific overrides - Flying Saucer Compatible */
+        body {
+            font-family: sans-serif;
+        }
+
+        .header {
+            width: 100%;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 10px;
+        }
+
+        .logo-container {
+            width: 100px;
+            float: left;
+        }
+
+        .logo-container img {
+            width: 80px;
+            height: auto;
+        }
+
+        .empresa-info {
+            float: left;
+            margin-left: 20px;
+        }
+
+        .empresa-info h1 {
+            margin: 0;
+            font-size: 16pt;
+        }
+
+        /* Title Section - No Gradients */
+        .title-section {
+            clear: both;
+            background-color: #0d6efd;
+            color: white;
+            padding: 10px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .title-section h2 {
+            margin: 0;
+            font-size: 14pt;
+            color: white;
+        }
+
+        .title-section p {
+            margin: 5px 0 0 0;
+            font-size: 10pt;
+            color: #cce5ff;
+        }
+
+        /* Summary Table */
+        table.summary {
+            width: 100%;
+            margin-bottom: 20px;
+            border-spacing: 10px;
+        }
+
+        table.summary td {
+            vertical-align: top;
+            width: 50%;
+        }
+
+        .card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+
+        .card h3 {
+            margin: 0 0 10px 0;
+            font-size: 10pt;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .card .value {
+            font-size: 14pt;
+            font-weight: bold;
+        }
+
+        /* List Table */
+        table.list {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 8pt;
+        }
+
+        table.list th {
+            background-color: #f0f7ff;
+            color: #084298;
+            padding: 5px;
+            text-align: left;
+            border-bottom: 2px solid #0d6efd;
+        }
+
+        table.list td {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .info-box {
+            border: 1px solid #0d6efd;
+            background-color: #f0f7ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 30px;
+            font-size: 9pt;
+            color: #084298;
+        }
+
+        .info-box h4 {
+            margin: 0 0 5px 0;
+            font-size: 10pt;
+        }
+
+        .info-box p {
+            margin: 0;
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+            font-size: 8pt;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <table style="width: 100%;">
+            <tr>
+                <td style="width: 15%;" th:if="${empresa.hasLogo}">
+                    <img th:src="${empresa.logoUrl}" style="width: 80px;" alt="Logo" />
+                </td>
+                <td>
+                    <h1 th:text="${empresa.razaoSocial}" style="margin: 0;">Empresa</h1>
+                    <p th:if="${empresa.cnpj}" th:text="'CNPJ: ' + ${empresa.cnpj}" style="margin: 5px 0 0 0;"></p>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="title-section">
+        <h2>Demonstrativo de Distribuição de Lucros</h2>
+        <p th:text="${relatorio.periodo}">Janeiro 2026</p>
+    </div>
+
+    <!-- Summary Cards Table -->
+    <table class="summary">
+        <tr>
+            <!-- Total no Mês -->
+            <td>
+                <div class="card" style="border-top: 3px solid #0d6efd;">
+                    <h3>Total Distribuído no Mês</h3>
+                    <div class="value" style="color: #0d6efd;"
+                        th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.totalMes, 1, 'POINT', 2, 'COMMA')}"></div>
+                </div>
+            </td>
+            <!-- Acumulado -->
+            <td>
+                <div class="card" style="border-top: 3px solid #084298;">
+                    <h3>Acumulado no Ano (Exercício)</h3>
+                    <div class="value" style="color: #084298;"
+                        th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.totalAcumuladoAno, 1, 'POINT', 2, 'COMMA')}">
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="list">
+        <thead>
+            <tr>
+                <th width="15%">Data</th>
+                <th width="40%">Sócio / Beneficiário</th>
+                <th width="25%">Descrição / Ref.</th>
+                <th width="20%" style="text-align: right;">Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="item : ${relatorio.distribuicoes}">
+                <td th:text="${#temporals.format(item.data, 'dd/MM/yyyy')}">01/01</td>
+                <td style="font-weight: bold;" th:text="${item.socio}">Nome</td>
+                <td th:text="${item.descricao}">Desc</td>
+                <td style="text-align: right;"
+                    th:text="'R$ ' + ${#numbers.formatDecimal(item.valor, 1, 'POINT', 2, 'COMMA')}">0,00</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(relatorio.distribuicoes)}">
+                <td colspan="4" style="text-align: center; color: #999; padding: 15px;">Nenhuma distribuição registrada
+                    no período.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="info-box">
+        <h4>ℹ️ Nota Legal</h4>
+        <p>A distribuição de lucros é isenta de Imposto de Renda (IR) para os sócios, desde que a empresa mantenha a
+            escrituração contábil regular e apure lucro suficiente para cobrir os valores distribuídos. Este documento
+            serve como comprovante para a contabilidade.</p>
+    </div>
+
+    <div class="footer">
+        <p th:text="'Gerado em: ' + ${#temporals.format(dataGeracao, 'dd/MM/yyyy HH:mm')}"></p>
+    </div>
+</body>
+
+</html>

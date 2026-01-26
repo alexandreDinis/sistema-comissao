@@ -1,17 +1,45 @@
 version: "3.9"
 
 services:
+  backend:
+    build: .
+    image: sistema-comissao-backend
+    container_name: comissao-backend
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-comissao:5432/comissaodb
+      - SPRING_DATASOURCE_USERNAME=comissao
+      - SPRING_DATASOURCE_PASSWORD=comissao
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.PostgreSQLDialect
+      - APP_BASE_URL=http://localhost
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    restart: always
+
+  frontend:
+    build: ../sistema-comi-front
+    image: sistema-comissao-frontend
+    container_name: comissao-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always
+
   postgres:
     image: postgres:16-alpine
     container_name: postgres-comissao
     environment:
-      POSTGRES_DB: comissaodb
-      POSTGRES_USER: comissao
-      POSTGRES_PASSWORD: comissao
+      - POSTGRES_DB=comissaodb
+      - POSTGRES_USER=comissao
+      - POSTGRES_PASSWORD=comissao
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: always
 
 volumes:
   postgres_data:
