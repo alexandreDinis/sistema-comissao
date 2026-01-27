@@ -5,5 +5,7 @@ public enum Role {
     ADMIN, // Deprecated
     ADMIN_EMPRESA,
     FUNCIONARIO,
+    ADMIN_LICENCA, // Owner of a White Label License (Reseller Admin)
+    REVENDEDOR, // Alias or sub-role if needed
     SUPER_ADMIN
 }

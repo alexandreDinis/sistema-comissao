@@ -63,8 +63,26 @@ public class Empresa {
     @Column(length = 2)
     private String uf; // Estado da empresa
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "licenca_id")
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+    private Licenca licenca; // Current reseller (NULL = direct owner management)
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "licenca_original_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private Licenca licencaOriginal; // History: who originally brought this tenant
+
+    @Column(name = "valor_mensal_pago", precision = 10, scale = 2)
+    private java.math.BigDecimal valorMensalPago;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     @Builder.Default
-    private boolean ativo = true;
+    private com.empresa.comissao.domain.enums.StatusEmpresa status = com.empresa.comissao.domain.enums.StatusEmpresa.ATIVA;
+
+    @Builder.Default
+    private boolean ativo = true; // Mantido por compatibilidade, mas usar status preferencialmente
 
     @Column(name = "data_criacao", nullable = false, updatable = false)
     private LocalDateTime dataCriacao;

@@ -62,7 +62,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         com.empresa.comissao.domain.entity.Empresa empresa = ((com.empresa.comissao.domain.entity.User) userDetails)
                                 .getEmpresa();
                         if (empresa != null) {
-                            com.empresa.comissao.config.TenantContext.setTenant(empresa.getId());
+                            com.empresa.comissao.config.TenantContext.setCurrentTenant(empresa.getId());
                         }
                     }
                 }

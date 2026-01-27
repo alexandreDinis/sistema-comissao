@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sistema-db-dev
+    environment:
+      POSTGRES_DB: comissaodb
+      POSTGRES_USER: comissao
+      POSTGRES_PASSWORD: comissao
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - sistema-net-dev
+
+volumes:
+  postgres_data_dev:
+
+
+networks:
+  sistema-net-dev:

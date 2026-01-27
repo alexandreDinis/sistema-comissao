@@ -186,4 +186,112 @@ public class PlatformController {
         private Plano plano;
         private String adminEmail;
     }
+
+    // ========================================
+    // OWNER DASHBOARD — Per-Reseller Stats
+    // ========================================
+
+    private final com.empresa.comissao.repository.LicencaRepository licencaRepository;
+
+    @GetMapping("/licencas")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<com.empresa.comissao.domain.entity.Licenca>> listLicencas() {
+        return ResponseEntity.ok(licencaRepository.findAll());
+    }
+
+    @GetMapping("/licencas/{id}/stats")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<LicencaStats> getLicencaStats(@PathVariable Long id) {
+        var licenca = licencaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Licença não encontrada"));
+
+        long total = empresaRepository.countByLicencaId(id);
+        long ativos = empresaRepository.countByLicencaIdAndStatus(id,
+                com.empresa.comissao.domain.enums.StatusEmpresa.ATIVA);
+        long bloqueados = empresaRepository.countByLicencaIdAndStatus(id,
+                com.empresa.comissao.domain.enums.StatusEmpresa.BLOQUEADA);
+        java.math.BigDecimal receitaTotal = empresaRepository.sumValorMensalPagoByLicencaId(id);
+        if (receitaTotal == null)
+            receitaTotal = java.math.BigDecimal.ZERO;
+
+        // Split calculation (configurable: example 20% royalty to owner)
+        java.math.BigDecimal royaltyPercent = new java.math.BigDecimal("0.20"); // 20% for owner
+        java.math.BigDecimal receitaOwner = receitaTotal.multiply(royaltyPercent);
+        java.math.BigDecimal receitaRevendedor = receitaTotal.subtract(receitaOwner);
+
+        return ResponseEntity.ok(LicencaStats.builder()
+                .licencaId(id)
+                .razaoSocial(licenca.getRazaoSocial())
+                .nomeFantasia(licenca.getNomeFantasia())
+                .status(licenca.getStatus().name())
+                .totalTenants((int) total)
+                .tenantsAtivos((int) ativos)
+                .tenantsBloqueados((int) bloqueados)
+                .receitaTotalTenants(receitaTotal)
+                .receitaRevendedor(receitaRevendedor)
+                .receitaOwner(receitaOwner)
+                .crescimentoMensal(java.math.BigDecimal.ZERO) // TODO: calcular MoM
+                .build());
+    }
+
+    @PostMapping("/licencas/{id}/rescindir")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public ResponseEntity<Void> rescindirLicenca(@PathVariable Long id) {
+        var licenca = licencaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Licença não encontrada"));
+
+        log.warn("🔴 RESCINDINDO LICENÇA: {} ({})", licenca.getRazaoSocial(), id);
+
+        // 1. Migrate all tenants to direct owner management
+        var tenants = empresaRepository.findByLicencaId(id);
+        for (var tenant : tenants) {
+            tenant.setLicencaOriginal(tenant.getLicenca()); // Keep history
+            tenant.setLicenca(null); // Orphan = direct owner management
+            empresaRepository.save(tenant);
+            log.info("  → Tenant {} migrado para gestão direta", tenant.getNome());
+        }
+
+        // 2. Mark license as cancelled
+        licenca.setStatus(com.empresa.comissao.domain.enums.StatusLicenca.CANCELADA);
+        licencaRepository.save(licenca);
+
+        log.warn("✅ Licença {} rescindida. {} tenants migrados.", id, tenants.size());
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/tenants/orphans")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<Empresa>> listOrphanTenants() {
+        return ResponseEntity.ok(empresaRepository.findByLicencaIsNull());
+    }
+
+    @PostMapping("/tenants/{tenantId}/reassign")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public ResponseEntity<Empresa> reassignTenant(@PathVariable Long tenantId, @RequestParam Long licencaId) {
+        var tenant = empresaRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Tenant não encontrado"));
+        var licenca = licencaRepository.findById(licencaId)
+                .orElseThrow(() -> new RuntimeException("Licença não encontrada"));
+
+        tenant.setLicenca(licenca);
+        return ResponseEntity.ok(empresaRepository.save(tenant));
+    }
+
+    @Data
+    @lombok.Builder
+    static class LicencaStats {
+        private Long licencaId;
+        private String razaoSocial;
+        private String nomeFantasia;
+        private String status;
+        private Integer totalTenants;
+        private Integer tenantsAtivos;
+        private Integer tenantsBloqueados;
+        private java.math.BigDecimal receitaTotalTenants;
+        private java.math.BigDecimal receitaRevendedor;
+        private java.math.BigDecimal receitaOwner; // Royalty
+        private java.math.BigDecimal crescimentoMensal;
+    }
 }

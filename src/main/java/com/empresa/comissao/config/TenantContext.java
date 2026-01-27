@@ -1,21 +1,27 @@
 package com.empresa.comissao.config;
 
-import org.springframework.stereotype.Component;
-
-@Component
 public class TenantContext {
+    private static final ThreadLocal<Long> currentTenantId = new ThreadLocal<>();
+    private static final ThreadLocal<Long> currentLicencaId = new ThreadLocal<>();
 
-    private static final ThreadLocal<Long> currentTenant = new ThreadLocal<>();
-
-    public static void setTenant(Long tenantId) {
-        currentTenant.set(tenantId);
+    public static void setCurrentTenant(Long tenantId) {
+        currentTenantId.set(tenantId);
     }
 
-    public static Long getTenant() {
-        return currentTenant.get();
+    public static Long getCurrentTenant() {
+        return currentTenantId.get();
+    }
+
+    public static void setCurrentLicenca(Long licencaId) {
+        currentLicencaId.set(licencaId);
+    }
+
+    public static Long getCurrentLicenca() {
+        return currentLicencaId.get();
     }
 
     public static void clear() {
-        currentTenant.remove();
+        currentTenantId.remove();
+        currentLicencaId.remove();
     }
 }

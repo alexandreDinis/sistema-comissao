@@ -1,0 +1,25 @@
+# Caddyfile - Reverse Proxy com HTTPS Automático
+# Copiar para /etc/caddy/Caddyfile na VM Oracle
+
+api.martelinhodigital.com.br {
+    # Reverse proxy para o backend Spring Boot
+    reverse_proxy localhost:8080 {
+        # Health check
+        health_uri /actuator/health
+        health_interval 30s
+    }
+    
+    # Headers de segurança
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+    
+    # Logs
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}
