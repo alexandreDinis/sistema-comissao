@@ -39,6 +39,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/health",
                                 "/api/v1/auth/**",
+                                "/actuator/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html")
@@ -59,6 +60,7 @@ public class SecurityConfig {
         config.setAllowCredentials(true);
         config.setAllowedOriginPatterns(allowedOrigins); // Use injected value or default *
         config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Content-Disposition"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
 
         source.registerCorsConfiguration("/**", config);

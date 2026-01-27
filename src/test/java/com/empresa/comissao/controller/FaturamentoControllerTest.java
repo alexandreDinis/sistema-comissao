@@ -43,7 +43,7 @@ class FaturamentoControllerTest {
                 .valor(request.getValor())
                 .build();
 
-        when(comissaoService.adicionarFaturamento(any(), any())).thenReturn(faturamento);
+        when(comissaoService.adicionarFaturamento(any(), any(), any())).thenReturn(faturamento);
 
         mockMvc.perform(post("/api/v1/faturamento")
                 .contentType(MediaType.APPLICATION_JSON)

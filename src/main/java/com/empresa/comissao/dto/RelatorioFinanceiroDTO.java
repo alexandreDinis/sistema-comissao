@@ -14,6 +14,8 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RelatorioFinanceiroDTO {
+    private int ano;
+    private int mes;
     private Map<CategoriaDespesa, BigDecimal> despesasPorCategoria;
     private BigDecimal faturamentoTotal;
     private BigDecimal despesasTotal;

@@ -1,6 +1,7 @@
 package com.empresa.comissao.domain.entity;
 
 import com.empresa.comissao.domain.enums.CategoriaDespesa;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,6 +36,16 @@ public class Despesa {
 
     @Column(length = 255)
     private String descricao;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+    private Empresa empresa;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cartao_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+    private CartaoCredito cartao;
 
     @Column(name = "data_criacao", nullable = false, updatable = false)
     private LocalDateTime dataCriacao;

@@ -1,37 +1,69 @@
-version: '3.8'
+version: "3.3"
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: comissao-postgres
+  db:
+    image: postgres:16-alpine
+    container_name: sistema-db
+    restart: always
     environment:
-      POSTGRES_DB: comissaodb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${DB_NAME:-comissaodb}
+      POSTGRES_USER: ${DB_USER:-comissao}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no .env}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
     networks:
-      - comissao-network
+      - sistema-net
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: comissao-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
+  backend:
+    build: .
+    image: sistema-backend:latest
+    container_name: sistema-backend
+    restart: always
     depends_on:
-      - postgres
+      - db
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-comissaodb}
+      DB_USERNAME: ${DB_USER:-comissao}
+      DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no .env}
+
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no .env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://martelinhodigital.com.br,https://www.martelinhodigital.com.br}
+
+      AWS_S3_ACCESS_KEY: ${AWS_S3_ACCESS_KEY}
+      AWS_S3_SECRET_KEY: ${AWS_S3_SECRET_KEY}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
+      AWS_S3_PUBLIC_URL: ${AWS_S3_PUBLIC_URL}
+
+      MAIL_HOST: ${MAIL_HOST:-smtp-relay.brevo.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+
+      APP_BASE_URL: ${APP_BASE_URL:-https://martelinhodigital.com.br}
+      APP_NAME: ${APP_NAME:-Martelo Digital}
+
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -XX:+UseG1GC
+    ports:
+      - "127.0.0.1:8080:8080"
     networks:
-      - comissao-network
+      - sistema-net
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
-  postgres-data:
+  postgres_data:
 
 
 networks:
-  comissao-network:
+  sistema-net:
     driver: bridge

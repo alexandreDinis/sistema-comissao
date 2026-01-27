@@ -32,11 +32,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String jwt;
         final String userEmail;
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-        try {
+            // Check for Query Parameter (for direct downloads)
+            final String queryToken = request.getParameter("token");
+            if (queryToken != null && !queryToken.isEmpty()) {
+                jwt = queryToken;
+            } else {
+                filterChain.doFilter(request, response);
+                return;
+            }
+        } else {
             jwt = authHeader.substring(7).trim();
+        }
+
+        try {
             userEmail = jwtService.extractUsername(jwt);
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
@@ -48,12 +56,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     authToken.setDetails(
                             new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                    // Set Tenant Context
+                    if (userDetails instanceof com.empresa.comissao.domain.entity.User) {
+                        com.empresa.comissao.domain.entity.Empresa empresa = ((com.empresa.comissao.domain.entity.User) userDetails)
+                                .getEmpresa();
+                        if (empresa != null) {
+                            com.empresa.comissao.config.TenantContext.setCurrentTenant(empresa.getId());
+                        }
+                    }
                 }
             }
         } catch (Exception e) {
             // Log error if needed, but don't crash the request.
             // Proceed without authentication (will be 401/403 downstream).
+        } finally {
+            // We do NOT clear validation here because the request is still processing.
+            // Ideally we should clear AFTER the controller returns, but OnePerRequestFilter
+            // wraps the whole chain. Let's explicitly clear in a try-finally block AROUND
+            // the doFilter.
         }
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            com.empresa.comissao.config.TenantContext.clear();
+        }
     }
 }

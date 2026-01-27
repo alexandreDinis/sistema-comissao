@@ -1,5 +1,6 @@
 package com.empresa.comissao.domain.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,8 +24,18 @@ public class ComissaoCalculada {
     private Long id;
 
     @Convert(converter = YearMonthConverter.class)
-    @Column(name = "ano_mes_referencia", nullable = false, unique = true, length = 7)
+    @Column(name = "ano_mes_referencia", nullable = false, length = 7)
     private YearMonth anoMesReferencia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "password", "features" })
+    private User usuario;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "empresa_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+    private Empresa empresa;
 
     @Column(name = "faturamento_mensal_total", nullable = false, precision = 19, scale = 2)
     private BigDecimal faturamentoMensalTotal;
@@ -49,6 +60,22 @@ public class ComissaoCalculada {
 
     @Column(name = "data_atualizacao")
     private LocalDateTime dataAtualizacao;
+
+    // === NOVOS CAMPOS: Saldo Acumulativo e Quitação ===
+
+    @Column(name = "saldo_anterior", precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal saldoAnterior = BigDecimal.ZERO;
+
+    @Column(name = "quitado")
+    @Builder.Default
+    private Boolean quitado = false;
+
+    @Column(name = "data_quitacao")
+    private LocalDateTime dataQuitacao;
+
+    @Column(name = "valor_quitado", precision = 19, scale = 2)
+    private BigDecimal valorQuitado;
 
     @PrePersist
     protected void onCreate() {

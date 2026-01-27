@@ -1,0 +1,9 @@
+ id |        email        |                           password                           |     role      
+----+---------------------+--------------------------------------------------------------+---------------
+  3 | dinisde@gmail.com   | $2a$10$emUTOj5kLR.n5uGKs8NnCOnJXu66mDUs1wU9.IoexmsyuXv60xiQW | USER
+  4 | gustavo@gmail.com   | $2a$10$8BEQ995CD4hnMSQpPn3JlOjC/U40y5oj5AH25IroZtyOH2ElKjMeW | FUNCIONARIO
+  5 | rubens@gmail.com    | $2a$10$ZK9beLhBS1uOJ40MbrV2Z.SaN.El7bNchMrtJyozfriHM61VgeU8S | FUNCIONARIO
+  1 | admin@empresa.com   | $2a$10$DcFjyISOSBc9k0gnjmljKOC4/GU39FMVkBD5chxADCWNZMYAKhr9m | ADMIN_EMPRESA
+  2 | saas@plataforma.com | $2a$10$bLjIb02ZWtdHSdAOLj4Xx.JEdy5Nt0EC4TX2Mi/V6xi9k/Ox27/rW | SUPER_ADMIN
+(5 rows)
+

@@ -2,7 +2,6 @@ package com.empresa.comissao.service;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -19,8 +18,11 @@ public class RateLimitingService {
     }
 
     private Bucket newBucket(String key) {
-        // 5 attempts per 15 minutes
-        Bandwidth limit = Bandwidth.classic(5, Refill.intervally(5, Duration.ofMinutes(15)));
+        // 10 failed attempts per 10 minutes (more reasonable for testing)
+        Bandwidth limit = Bandwidth.builder()
+                .capacity(10)
+                .refillIntervally(10, Duration.ofMinutes(10))
+                .build();
         return Bucket.builder()
                 .addLimit(limit)
                 .build();

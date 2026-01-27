@@ -22,4 +22,12 @@ public class DespesaRequestDTO {
     private CategoriaDespesa categoria;
 
     private String descricao;
+
+    private boolean pagoAgora = false;
+
+    private LocalDate dataVencimento;
+
+    private com.empresa.comissao.domain.enums.MeioPagamento meioPagamento;
+
+    private Long cartaoId; // ID do cartão de crédito (se aplicável)
 }

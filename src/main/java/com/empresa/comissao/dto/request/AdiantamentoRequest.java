@@ -18,4 +18,6 @@ public class AdiantamentoRequest {
     private LocalDate dataPagamento;
 
     private String observacao;
+
+    private Long usuarioId;
 }

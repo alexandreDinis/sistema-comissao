@@ -52,6 +52,9 @@ Thumbs.db
 
 # Application
 application-local.properties
+.env
+.env.*
+*.env
 
 # Allow Maven Wrapper
 !.mvn/wrapper/maven-wrapper.jar

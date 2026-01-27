@@ -1,0 +1,1 @@
+bash: /usr/lib/jvm/java-25-openjdk/bin/javac: Arquivo ou diretório inexistente

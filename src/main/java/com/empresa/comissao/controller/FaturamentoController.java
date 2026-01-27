@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -23,10 +24,18 @@ public class FaturamentoController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Faturamento> registrarFaturamento(@RequestBody FaturamentoRequest request) {
+    public ResponseEntity<Faturamento> registrarFaturamento(
+            @RequestBody FaturamentoRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
         Faturamento faturamento = comissaoService.adicionarFaturamento(request.getDataFaturamento(),
-                request.getValor());
+                request.getValor(), usuario);
         return new ResponseEntity<>(faturamento, HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Faturamento>> listar(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+        return ResponseEntity.ok(comissaoService.listarFaturamentos(usuario != null ? usuario.getEmpresa() : null));
     }
 
     @Getter
