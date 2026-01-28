@@ -18,7 +18,7 @@ import java.util.Set;
  */
 @Service
 @Slf4j
-@ConditionalOnProperty(name = "aws.s3.bucket")
+@ConditionalOnProperty(name = "aws.s3.bucket", matchIfMissing = false)
 public class S3StorageService implements StorageService {
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
@@ -27,7 +27,7 @@ public class S3StorageService implements StorageService {
 
     private final S3Client s3Client;
 
-    @Value("${aws.s3.bucket}")
+    @Value("${aws.s3.bucket:}")
     private String bucketName;
 
     @Value("${aws.s3.public-url:#{null}}")

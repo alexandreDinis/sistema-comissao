@@ -18,13 +18,13 @@ import java.net.URI;
  * Uses custom endpoint for non-AWS providers.
  */
 @Configuration
-@ConditionalOnProperty(name = "aws.s3.bucket")
+@ConditionalOnProperty(name = "aws.s3.bucket", matchIfMissing = false)
 public class S3Config {
 
-    @Value("${aws.s3.access-key}")
+    @Value("${aws.s3.access-key:}")
     private String accessKey;
 
-    @Value("${aws.s3.secret-key}")
+    @Value("${aws.s3.secret-key:}")
     private String secretKey;
 
     @Value("${aws.s3.region:us-east-1}")
