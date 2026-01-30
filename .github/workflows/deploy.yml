@@ -22,6 +22,6 @@ jobs:
              git checkout main
              git pull origin main
              cd ~/app
-             docker compose down
-             docker compose up -d --build
-             docker compose ps
+             docker-compose down
+             docker-compose up -d --build
+             docker-compose ps
