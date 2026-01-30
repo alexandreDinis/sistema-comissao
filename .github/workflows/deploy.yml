@@ -16,11 +16,12 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            set -e
-            cd ~/app
-            git fetch origin
-            git checkout main
-            git pull origin main
-            docker compose down
-            docker compose up -d --build
-            docker compose ps
+             set -e
+             cd ~/app/backend
+             git fetch origin
+             git checkout main
+             git pull origin main
+             cd ~/app
+             docker compose down
+             docker compose up -d --build
+             docker compose ps
