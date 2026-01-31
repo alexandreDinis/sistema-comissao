@@ -16,4 +16,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByEmpresa(Empresa empresa);
 
     List<User> findByEmpresaAndRole(Empresa empresa, com.empresa.comissao.domain.enums.Role role);
+
+    List<User> findByLicencaAndRole(com.empresa.comissao.domain.entity.Licenca licenca,
+            com.empresa.comissao.domain.enums.Role role);
+
+    long countByEmpresaLicencaId(Long licencaId);
 }

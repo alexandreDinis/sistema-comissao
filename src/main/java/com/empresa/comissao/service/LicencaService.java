@@ -1,5 +1,6 @@
 package com.empresa.comissao.service;
 
+import com.empresa.comissao.controller.LicencaController.AtualizarLicencaRequest;
 import com.empresa.comissao.domain.entity.Empresa;
 import com.empresa.comissao.domain.entity.Licenca;
 import com.empresa.comissao.domain.entity.PlanoLicenca;
@@ -127,5 +128,57 @@ public class LicencaService {
     public Licenca buscarPorId(Long id) {
         return licencaRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Licença não encontrada"));
+    }
+
+    @Transactional
+    public Licenca atualizarLicenca(Long id, AtualizarLicencaRequest request) {
+        Licenca licenca = buscarPorId(id);
+
+        // Check Unique Constraints (excluding self)
+        if (!licenca.getCnpj().equals(request.getCnpj()) && licencaRepository.existsByCnpj(request.getCnpj())) {
+            throw new IllegalArgumentException("CNPJ já cadastrado para outra licença");
+        }
+        if (!licenca.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
+            // Need to be careful here: if the email exists, is it the USER of this Licenca?
+            // Safer to block duplicates generally, but we need to handle the update of the
+            // linked user below.
+            // If the found user is NOT the admin of THIS licenca, then it's a conflict.
+            User existing = userRepository.findByEmail(request.getEmail()).orElse(null);
+            if (existing != null) {
+                // If the existing user is NOT related to this license...
+                if (existing.getLicenca() == null || !existing.getLicenca().getId().equals(id)) {
+                    throw new IllegalArgumentException("E-mail já cadastrado no sistema");
+                }
+            }
+        }
+
+        // Update Fields
+        licenca.setRazaoSocial(request.getRazaoSocial());
+        licenca.setNomeFantasia(request.getNomeFantasia());
+        licenca.setCnpj(request.getCnpj());
+        licenca.setTelefone(request.getTelefone());
+
+        // Update Email and Linked Admin User
+        if (!licenca.getEmail().equals(request.getEmail())) {
+            String oldEmail = licenca.getEmail();
+            licenca.setEmail(request.getEmail());
+
+            // Update Admin User
+            // Assuming 1 Principal Admin per License (Role.ADMIN_LICENCA)
+            List<User> admins = userRepository.findByLicencaAndRole(licenca, Role.ADMIN_LICENCA);
+            if (!admins.isEmpty()) {
+                // Ideally updates the one matching oldEmail, or the first one if logic dictates
+                for (User admin : admins) {
+                    if (admin.getEmail().equals(oldEmail) || admins.size() == 1) {
+                        admin.setEmail(request.getEmail());
+                        userRepository.save(admin);
+                        log.info("📧 Updated Admin Email for License {}: {} -> {}", id, oldEmail, request.getEmail());
+                        break; // Update only the main one match
+                    }
+                }
+            }
+        }
+
+        return licencaRepository.save(licenca);
     }
 }

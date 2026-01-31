@@ -105,7 +105,40 @@ public class PlatformController {
 
     @GetMapping("/stats")
     @PreAuthorize("hasAuthority('PLATFORM_DASHBOARD_VIEW') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
-    public ResponseEntity<PlatformStats> getStats() {
+    public ResponseEntity<PlatformStats> getStats(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+
+        // Isolation Logic
+        if (principal.getRole() == Role.ADMIN_LICENCA || principal.getRole() == Role.REVENDEDOR) {
+            if (principal.getLicenca() == null) {
+                return ResponseEntity.ok(PlatformStats.builder().mrr(java.math.BigDecimal.ZERO).build());
+            }
+            Long licencaId = principal.getLicenca().getId();
+
+            // Count only OWN tenants
+            long total = empresaRepository.countByLicencaId(licencaId);
+            long active = empresaRepository.countByLicencaIdAndStatus(licencaId,
+                    com.empresa.comissao.domain.enums.StatusEmpresa.ATIVA);
+            long bronze = empresaRepository.countByLicencaIdAndPlano(licencaId, Plano.BRONZE);
+            long silver = empresaRepository.countByLicencaIdAndPlano(licencaId, Plano.PRATA);
+            long gold = empresaRepository.countByLicencaIdAndPlano(licencaId, Plano.OURO);
+
+            // Users count is tricky - need repository method or count users of owned
+            // companies
+            long users = userRepository.countByEmpresaLicencaId(licencaId);
+
+            return ResponseEntity.ok(PlatformStats.builder()
+                    .totalTenants(total)
+                    .activeTenants(active)
+                    .bronzeTenants(bronze)
+                    .silverTenants(silver)
+                    .goldTenants(gold)
+                    .totalUsers(users)
+                    .mrr(java.math.BigDecimal.ZERO)
+                    .build());
+        }
+
+        // SUPER_ADMIN sees all
         return ResponseEntity.ok(PlatformStats.builder()
                 .totalTenants(empresaRepository.count())
                 .activeTenants(empresaRepository.countByAtivoTrue())
