@@ -55,6 +55,7 @@ application-local.properties
 .env
 .env.*
 *.env
+start-dev.sh
 
 # Allow Maven Wrapper
 !.mvn/wrapper/maven-wrapper.jar

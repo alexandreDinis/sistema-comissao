@@ -29,6 +29,8 @@ public class OrdemServicoService {
         private final PrestadorRepository prestadorRepository;
         private final ComissaoService comissaoService;
         private final FinanceiroService financeiroService;
+        private final UserRepository userRepository;
+        private final ContaReceberRepository contaReceberRepository;
 
         @Transactional
         public OrdemServicoResponse atualizarStatus(Long id,
@@ -178,6 +180,40 @@ public class OrdemServicoService {
                         os.recalcularTotal();
                 }
 
+                // Handle Salesperson Assignment (Admin/Manager only)
+                // Handle Salesperson Assignment (Admin/Manager only)
+                if (request.getUsuarioId() != null) {
+                        Long currentUserId = os.getUsuario() != null ? os.getUsuario().getId() : null;
+
+                        if (currentUserId == null || !currentUserId.equals(request.getUsuarioId())) {
+                                log.info("bust: Updating OS User from {} to {}", currentUserId,
+                                                request.getUsuarioId());
+                                com.empresa.comissao.domain.entity.User newUser = userRepository
+                                                .findById(request.getUsuarioId())
+                                                .orElseThrow(() -> new EntityNotFoundException(
+                                                                "Usuário não encontrado"));
+
+                                os.setUsuario(newUser);
+
+                                // Propagate to Faturamento and ContaReceber if they exist
+                                faturamentoRepository.findByOrdemServico(os).ifPresent(faturamento -> {
+                                        faturamento.setUsuario(newUser);
+                                        faturamentoRepository.save(faturamento);
+
+                                        log.info("bust: Updated Faturamento owner to {}", newUser.getEmail());
+
+                                        // Update ContaReceber
+                                        contaReceberRepository.findByFaturamentoId(faturamento.getId())
+                                                        .ifPresent(conta -> {
+                                                                conta.setFuncionarioResponsavel(newUser);
+                                                                contaReceberRepository.save(conta);
+                                                                log.info("bust: Updated ContaReceber owner to {}",
+                                                                                newUser.getEmail());
+                                                        });
+                                });
+                        }
+                }
+
                 os = osRepository.save(os);
                 return mapToResponse(os);
         }
@@ -227,11 +263,17 @@ public class OrdemServicoService {
                                 .dataVencimento(request.getDataVencimento() != null ? request.getDataVencimento()
                                                 : request.getData())
                                 .valorTotal(BigDecimal.ZERO)
-                                .tipoDesconto(request.getTipoDesconto())
-                                .valorDesconto(request.getValorDesconto())
-                                .usuario(usuario)
                                 .empresa(empresa)
                                 .build();
+
+                // Allow overriding user if provided (e.g. Admin creating for Salesperson)
+                if (request.getUsuarioId() != null) {
+                        com.empresa.comissao.domain.entity.User targetUser = userRepository
+                                        .findById(request.getUsuarioId())
+                                        .orElseThrow(() -> new EntityNotFoundException(
+                                                        "Usuário indicado não encontrado"));
+                        os.setUsuario(targetUser);
+                }
 
                 os = osRepository.save(os);
                 return mapToResponse(os);
@@ -390,6 +432,7 @@ public class OrdemServicoService {
                                 && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
                         com.empresa.comissao.domain.entity.User usuario = (com.empresa.comissao.domain.entity.User) authentication
                                         .getPrincipal();
+
                         if (usuario.getEmpresa() != null) {
                                 return osRepository.findByEmpresa(usuario.getEmpresa()).stream()
                                                 .map(this::mapToResponse)
@@ -425,6 +468,9 @@ public class OrdemServicoService {
                                                 .cnpj(os.getCliente().getCnpj())
                                                 .contato(os.getCliente().getContato())
                                                 .build())
+                                .usuarioId(os.getUsuario() != null ? os.getUsuario().getId() : null)
+                                .usuarioNome(os.getUsuario() != null ? os.getUsuario().getEmail() : null)
+                                .usuarioEmail(os.getUsuario() != null ? os.getUsuario().getEmail() : null)
                                 .veiculos(os.getVeiculos().stream().map(this::mapVeiculo).collect(Collectors.toList()))
                                 .build();
         }

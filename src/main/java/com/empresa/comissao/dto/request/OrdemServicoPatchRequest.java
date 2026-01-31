@@ -21,4 +21,7 @@ public class OrdemServicoPatchRequest {
 
     // Payment due date
     private LocalDate dataVencimento;
+
+    // Optional: Update salesperson (Admin only)
+    private Long usuarioId;
 }

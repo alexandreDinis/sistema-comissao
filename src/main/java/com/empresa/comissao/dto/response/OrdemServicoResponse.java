@@ -26,4 +26,9 @@ public class OrdemServicoResponse {
     // Payment due date
     private LocalDate dataVencimento;
     private boolean atrasado; // true if status=EM_EXECUCAO and due date is past
+
+    // Responsible User (Salesperson)
+    private Long usuarioId;
+    private String usuarioNome;
+    private String usuarioEmail;
 }

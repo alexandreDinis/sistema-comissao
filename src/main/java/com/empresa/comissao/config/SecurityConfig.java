@@ -36,6 +36,9 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
+                        // Platform API (Super Admin & Resellers)
+                        .requestMatchers("/api/v1/platform/**")
+                        .hasAnyRole("SUPER_ADMIN", "REVENDEDOR", "ADMIN_LICENCA")
                         .requestMatchers(
                                 "/health",
                                 "/api/v1/auth/**",

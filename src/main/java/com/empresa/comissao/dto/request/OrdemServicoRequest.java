@@ -26,4 +26,7 @@ public class OrdemServicoRequest {
 
     // Payment due date (optional - defaults to creation date)
     private LocalDate dataVencimento;
+
+    // Optional: Assign specific salesperson (Admin only)
+    private Long usuarioId;
 }
