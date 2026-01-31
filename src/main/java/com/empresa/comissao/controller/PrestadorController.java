@@ -32,7 +32,7 @@ public class PrestadorController {
     private final PrestadorRepository prestadorRepository;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA', 'FUNCIONARIO', 'USER')")
     @Operation(summary = "Listar prestadores ativos")
     public ResponseEntity<List<Prestador>> listar(
             @RequestParam(defaultValue = "true") boolean apenasAtivos,

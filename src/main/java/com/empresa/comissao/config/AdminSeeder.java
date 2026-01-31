@@ -33,21 +33,19 @@ public class AdminSeeder {
                 User user = repository.findByEmail(email).orElse(null);
 
                 if (user == null) {
-                    log.info("ℹ️ Admin user not found in repo (might exist in DB but not mapped?). Creating...");
+                    log.info("ℹ️ Admin user not found in repo. Creating...");
                     user = User.builder()
                             .email(email)
                             .role(Role.ADMIN_EMPRESA)
                             .empresa(empresa)
+                            .password(passwordEncoder.encode("admin123")) // Set password only on creation
+                            .active(true)
                             .build();
+                    repository.save(user);
+                    log.info("✅ Admin user created. Email: {}", email);
+                } else {
+                    log.info("ℹ️ Admin user already exists. Skipping password reset.");
                 }
-
-                // Always reset credentials to ensure they are correct
-                user.setRole(Role.ADMIN_EMPRESA); // Ensure proper role if existed with old role
-                user.setEmpresa(empresa); // Ensure linkage
-                user.setPassword(passwordEncoder.encode("admin123"));
-                user.setActive(true);
-                repository.save(user); // JPA Update or Insert
-                log.info("✅ Admin user ensured. Email: {}, Role: {}, active: true", email, user.getRole());
 
             } catch (Exception e) {
                 log.error("❌ Failed to seed admin user", e);
@@ -65,20 +63,19 @@ public class AdminSeeder {
                             .email(superEmail)
                             .role(Role.SUPER_ADMIN)
                             .empresa(null) // Explicitly null
+                            .password(passwordEncoder.encode("47548971")) // Defaul Super Admin Pass
+                            .active(true)
                             .build();
+                    repository.save(superUser);
+                    log.info("✅ Super Admin created. Email: {}", superEmail);
+                } else {
+                    log.info("ℹ️ Super Admin already exists. Skipping password reset.");
                 }
-
-                superUser.setRole(Role.SUPER_ADMIN);
-                superUser.setEmpresa(null); // Ensure null
-                superUser.setPassword(passwordEncoder.encode("admin123")); // Ensure password
-                superUser.setActive(true);
-                repository.save(superUser);
-                log.info("✅ Super Admin ensured (Platform Level). Email: {}, Role: {}", superEmail,
-                        superUser.getRole());
 
             } catch (Exception e) {
                 log.error("❌ Failed to seed Super Admin", e);
             }
+
         };
     }
 }
