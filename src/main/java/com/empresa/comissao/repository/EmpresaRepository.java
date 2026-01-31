@@ -42,4 +42,6 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     // Risk Management: Tenants linked to suspended/cancelled resellers
     @Query("SELECT e FROM Empresa e WHERE e.licenca.status IN ('SUSPENSA', 'CANCELADA')")
     java.util.List<Empresa> findEmpresasComRevendedorBloqueado();
+
+    long countByLicencaIdAndPlano(Long licencaId, Plano plano);
 }

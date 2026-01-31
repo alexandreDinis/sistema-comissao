@@ -56,4 +56,19 @@ public class LicencaController {
         private String telefone;
         private String senhaAdmin;
     }
+
+    @Data
+    public static class AtualizarLicencaRequest {
+        private String razaoSocial;
+        private String nomeFantasia;
+        private String cnpj;
+        private String email;
+        private String telefone;
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Licenca> atualizarLicenca(@PathVariable Long id,
+            @RequestBody AtualizarLicencaRequest request) {
+        return ResponseEntity.ok(licencaService.atualizarLicenca(id, request));
+    }
 }
