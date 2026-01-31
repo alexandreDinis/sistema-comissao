@@ -50,4 +50,6 @@ public interface FaturamentoRepository extends JpaRepository<Faturamento, Long> 
                         "WHERE f.empresa = :empresa AND YEAR(f.dataFaturamento) = :ano " +
                         "GROUP BY MONTH(f.dataFaturamento) ORDER BY MONTH(f.dataFaturamento)")
         List<Object[]> findFaturamentoMensalByAnoAndEmpresa(@Param("ano") int ano, @Param("empresa") Empresa empresa);
+
+        Optional<Faturamento> findByOrdemServico(com.empresa.comissao.domain.entity.OrdemServico ordemServico);
 }

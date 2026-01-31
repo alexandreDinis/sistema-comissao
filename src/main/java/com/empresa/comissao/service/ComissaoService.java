@@ -97,7 +97,10 @@ public class ComissaoService {
                                 comissaoCalculadaRepository.delete(comissaoExistente.get());
                                 comissaoExistente = Optional.empty();
                         } else {
-                                log.info("✅ Comissão encontrada em cache: {}", anoMesReferencia);
+                                log.info("✅ Comissão encontrada em cache: {} - Valor: {} - Quitado: {}",
+                                                anoMesReferencia,
+                                                comissaoExistente.get().getSaldoAReceber(),
+                                                comissaoExistente.get().getQuitado());
                                 return comissaoExistente.get();
                         }
                 }

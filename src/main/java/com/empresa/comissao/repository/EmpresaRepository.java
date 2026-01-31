@@ -26,6 +26,8 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
 
     java.util.List<Empresa> findByLicencaId(Long licencaId);
 
+    java.util.List<Empresa> findByLicenca(com.empresa.comissao.domain.entity.Licenca licenca);
+
     java.util.List<Empresa> findByLicencaIdAndStatus(Long licencaId, StatusEmpresa status);
 
     // Stats for Owner Dashboard
@@ -36,4 +38,8 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     java.util.List<Empresa> findByLicencaIsNull();
 
     long countByLicencaIsNull();
+
+    // Risk Management: Tenants linked to suspended/cancelled resellers
+    @Query("SELECT e FROM Empresa e WHERE e.licenca.status IN ('SUSPENSA', 'CANCELADA')")
+    java.util.List<Empresa> findEmpresasComRevendedorBloqueado();
 }

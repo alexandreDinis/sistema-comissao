@@ -33,21 +33,52 @@ public class PlatformController {
     private final PasswordEncoder passwordEncoder;
 
     @GetMapping("/tenants")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE')")
-    public ResponseEntity<List<Empresa>> listTenants() {
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    public ResponseEntity<List<Empresa>> listTenants(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+        // Isolation Check
+        if (principal.getRole() == Role.ADMIN_LICENCA || principal.getRole() == Role.REVENDEDOR) {
+            if (principal.getLicenca() == null) {
+                return ResponseEntity.ok(java.util.Collections.emptyList());
+            }
+            return ResponseEntity.ok(empresaRepository.findByLicenca(principal.getLicenca()));
+        }
+
+        // SUPER_ADMIN sees all
         return ResponseEntity.ok(empresaRepository.findAll());
     }
 
     @PostMapping("/tenants")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE')")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     @Transactional
-    public ResponseEntity<Empresa> createTenant(@RequestBody CreateTenantRequest request) {
+    public ResponseEntity<?> createTenant(@RequestBody CreateTenantRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+
+        // Determine License Context
+        com.empresa.comissao.domain.entity.Licenca ownerLicenca = null;
+
+        if (principal.getRole() == Role.ADMIN_LICENCA || principal.getRole() == Role.REVENDEDOR) {
+            if (principal.getLicenca() == null) {
+                return ResponseEntity.badRequest().body("Erro: Revendedor sem licença vinculada.");
+            }
+            ownerLicenca = principal.getLicenca();
+        } else if (request.getLicencaId() != null) {
+            // SUPER_ADMIN manually assigning a license
+            ownerLicenca = licencaRepository.findById(request.getLicencaId())
+                    .orElseThrow(() -> new RuntimeException("Licença informada não encontrada"));
+        } else {
+            // CRITICAL: Orphan tenants are not allowed.
+            return ResponseEntity.badRequest()
+                    .body("Erro: É obrigatório vincular uma Licença (Revendedor) ao criar um Tenant.");
+        }
+
         // 1. Create Company
         var empresa = Empresa.builder()
                 .nome(request.getNome())
                 .cnpj(request.getCnpj())
                 .plano(request.getPlano())
                 .ativo(true)
+                .licenca(ownerLicenca) // Link to Reseller if applicable
                 .build();
         empresa = empresaRepository.save(empresa);
 
@@ -73,7 +104,7 @@ public class PlatformController {
     }
 
     @GetMapping("/stats")
-    @PreAuthorize("hasAuthority('PLATFORM_DASHBOARD_VIEW')")
+    @PreAuthorize("hasAuthority('PLATFORM_DASHBOARD_VIEW') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     public ResponseEntity<PlatformStats> getStats() {
         return ResponseEntity.ok(PlatformStats.builder()
                 .totalTenants(empresaRepository.count())
@@ -87,7 +118,7 @@ public class PlatformController {
     }
 
     @GetMapping("/plans")
-    @PreAuthorize("hasAuthority('PLATFORM_PLAN_MANAGE')")
+    @PreAuthorize("hasAuthority('PLATFORM_PLAN_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     public ResponseEntity<java.util.List<PlanDTO>> getPlans() {
         return ResponseEntity.ok(java.util.Arrays.stream(Plano.values())
                 .map(p -> new PlanDTO(p.name(), p.name(), java.math.BigDecimal.ZERO)) // Todo: Add prices to Enum
@@ -95,20 +126,29 @@ public class PlatformController {
     }
 
     @PutMapping("/tenants/{id}/toggle-status")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE')")
-    public ResponseEntity<Empresa> toggleTenantStatus(@PathVariable Long id) {
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    public ResponseEntity<Empresa> toggleTenantStatus(@PathVariable Long id,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
         var empresa = empresaRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        // Security: Reseller check
+        checkResellerOwnership(principal, empresa);
+
         empresa.setAtivo(!empresa.isAtivo());
         return ResponseEntity.ok(empresaRepository.save(empresa));
     }
 
     @PutMapping("/tenants/{id}")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE')")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     @Transactional
-    public ResponseEntity<Empresa> updateTenant(@PathVariable Long id, @RequestBody UpdateTenantRequest request) {
+    public ResponseEntity<Empresa> updateTenant(@PathVariable Long id, @RequestBody UpdateTenantRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
         var empresa = empresaRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        // Security: Reseller check
+        checkResellerOwnership(principal, empresa);
 
         // 1. Update Basic Info
         empresa.setNome(request.getNome());
@@ -150,6 +190,15 @@ public class PlatformController {
         return ResponseEntity.ok(empresaRepository.save(empresa));
     }
 
+    private void checkResellerOwnership(User principal, Empresa empresa) {
+        if (principal.getRole() == Role.REVENDEDOR || principal.getRole() == Role.ADMIN_LICENCA) {
+            if (empresa.getLicenca() == null || !empresa.getLicenca().getId().equals(principal.getLicenca().getId())) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Você não tem permissão para gerenciar este inquilino.");
+            }
+        }
+    }
+
     @Data
     @lombok.Builder
     static class PlatformStats {
@@ -177,6 +226,7 @@ public class PlatformController {
         private Plano plano;
         private String adminEmail;
         private String adminPassword;
+        private Long licencaId; // Optional: For Super Admin to assign directly
     }
 
     @Data
@@ -185,6 +235,43 @@ public class PlatformController {
         private String cnpj;
         private Plano plano;
         private String adminEmail;
+    }
+
+    @Data
+    static class ResetPasswordRequest {
+        private String newPassword;
+    }
+
+    @PutMapping("/tenants/{id}/reset-password")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    @Transactional
+    public ResponseEntity<?> resetTenantAdminPassword(@PathVariable Long id, @RequestBody ResetPasswordRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+
+        var empresa = empresaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        // Security: Reseller check
+        checkResellerOwnership(principal, empresa);
+
+        if (request.getNewPassword() == null || request.getNewPassword().isBlank()) {
+            return ResponseEntity.badRequest().body("A nova senha é obrigatória.");
+        }
+
+        // Find Admin (Assuming single admin or main admin)
+        List<User> admins = userRepository.findByEmpresaAndRole(empresa, Role.ADMIN_EMPRESA);
+        if (admins.isEmpty()) {
+        }
+
+        // Reset for the first admin found (usually the owner)
+        User admin = admins.get(0);
+        admin.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(admin);
+
+        log.info("✅ Senha do admin da empresa {} redefinida com sucesso por {}", empresa.getNome(),
+                principal.getEmail());
+
+        return ResponseEntity.ok().build();
     }
 
     // ========================================
@@ -264,6 +351,13 @@ public class PlatformController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<Empresa>> listOrphanTenants() {
         return ResponseEntity.ok(empresaRepository.findByLicencaIsNull());
+    }
+
+    @GetMapping("/tenants/risk")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<Empresa>> listRiskyTenants() {
+        // Tenants whose reseller is suspended or cancelled
+        return ResponseEntity.ok(empresaRepository.findEmpresasComRevendedorBloqueado());
     }
 
     @PostMapping("/tenants/{tenantId}/reassign")
