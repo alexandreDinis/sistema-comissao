@@ -24,7 +24,9 @@ public enum CategoriaDespesa {
     // 4. DESPESAS COMERCIAIS
     MARKETING("Marketing e Publicidade"),
     VIAGENS_REPRESENTACAO("Viagens e Representação"),
+    ALIMENTACAO("Alimentação"),
     COMBUSTIVEL("Combustível"),
+    MANUTENCAO_VEICULO("Manutenção de Veículo"),
 
     // 5. DESPESAS FINANCEIRAS
     TARIFAS_BANCARIAS("Tarifas Bancárias"),

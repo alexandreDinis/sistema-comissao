@@ -42,6 +42,14 @@ public class OrdemServicoService {
 
                 validarAcesso(os);
 
+                // Validation: Cannot start OS without a responsible user
+                if (novoStatus == com.empresa.comissao.domain.enums.StatusOrdemServico.EM_EXECUCAO) {
+                        if (os.getUsuario() == null) {
+                                throw new IllegalStateException(
+                                                "Não é possível iniciar a OS sem um responsável técnico definido. Edite a OS e atribua um responsável.");
+                        }
+                }
+
                 if (novoStatus == com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA
                                 && os.getStatus() != com.empresa.comissao.domain.enums.StatusOrdemServico.FINALIZADA) {
 

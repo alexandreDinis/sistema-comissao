@@ -655,33 +655,71 @@ public class ComissaoService {
                 log.info("📊 Gerando relatório consolidado para {}/{} - Usuário: {}", ano, mes,
                                 usuario != null ? usuario.getEmail() : "GLOBAL");
 
-                // 1. Obter Comissão do Mês (respeitando modoComissao)
+                // ====================================================================
+                // RECEITA PARA DRE: Regime de Competência (data da OS)
+                // Diferente da comissão que usa Regime de Caixa (data do recebimento)
+                // ====================================================================
+                BigDecimal faturamentoTotal;
+
+                if (empresaFresh != null) {
+                        com.empresa.comissao.domain.enums.ModoComissao modo = empresaFresh.getModoComissao();
+
+                        if (modo == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
+                                // Modo COLETIVA: Receita total da empresa (por competência)
+                                faturamentoTotal = contaReceberRepository
+                                                .sumByCompetenciaBetweenForReports(empresaFresh, inicioDoMes, fimDoMes);
+                                log.info("💰 Receita DRE (COLETIVA - Competência): {}", faturamentoTotal);
+                        } else {
+                                // Modo INDIVIDUAL: Receita do funcionário (por competência)
+                                if (usuario != null && !usuario.isParticipaComissao()) {
+                                        // Usuário não participa de comissão, mas mostra receita global da empresa
+                                        faturamentoTotal = contaReceberRepository
+                                                        .sumByCompetenciaBetweenForReports(empresaFresh, inicioDoMes,
+                                                                        fimDoMes);
+                                        log.info("💰 Receita DRE (ADMIN sem comissão - Competência global): {}",
+                                                        faturamentoTotal);
+                                } else if (usuario != null) {
+                                        faturamentoTotal = contaReceberRepository
+                                                        .sumByCompetenciaBetweenAndFuncionarioForReports(
+                                                                        empresaFresh, usuario, inicioDoMes, fimDoMes);
+                                        log.info("💰 Receita DRE (INDIVIDUAL - Competência): {}", faturamentoTotal);
+                                } else {
+                                        // Fallback para caso sem usuário
+                                        faturamentoTotal = contaReceberRepository
+                                                        .sumByCompetenciaBetweenForReports(empresaFresh, inicioDoMes,
+                                                                        fimDoMes);
+                                        log.info("💰 Receita DRE (Fallback - Competência): {}", faturamentoTotal);
+                                }
+                        }
+                } else {
+                        // Fallback: usar faturamento tradicional se não houver empresa
+                        faturamentoTotal = faturamentoRepository
+                                        .sumValorByDataFaturamentoBetween(inicioDoMes, fimDoMes)
+                                        .orElse(BigDecimal.ZERO);
+                        log.info("💰 Receita DRE (Fallback legacy): {}", faturamentoTotal);
+                }
+
+                // 1. Obter Comissão do Mês (CONTINUA usando CAIXA como antes)
                 ComissaoCalculada comissao;
                 if (empresaFresh != null && empresaFresh
                                 .getModoComissao() == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
-                        log.info("📊 Relatório usando modo COLETIVA para empresa: {}", empresaFresh.getNome());
+                        log.info("📊 Comissão calculada em modo COLETIVA para empresa: {}", empresaFresh.getNome());
                         comissao = calcularComissaoEmpresaMensal(ano, mes, empresaFresh);
                 } else {
                         // Modo Individual
                         if (usuario != null && !usuario.isParticipaComissao()) {
-                                log.info("ℹ️ Usuário {} não participa de comissão. Retornando base zerada para relatório.",
+                                log.info("ℹ️ Usuário {} não participa de comissão. Zerando valores de comissão.",
                                                 usuario.getEmail());
                                 comissao = ComissaoCalculada.builder()
-                                                .faturamentoMensalTotal(BigDecimal.ZERO)
+                                                .faturamentoMensalTotal(BigDecimal.ZERO) // Comissão zerada
                                                 .valorBrutoComissao(BigDecimal.ZERO)
                                                 .saldoAReceber(BigDecimal.ZERO)
                                                 .valorTotalAdiantamentos(BigDecimal.ZERO)
                                                 .build();
-
-                                // Se for relatório financeiro (DRE), talvez devêssemos mostrar o faturamento
-                                // GLOBAL
-                                // mesmo no modo INDIVIDUAL, se for ADMIN?
-                                // Por enquanto, zero evita o crash.
                         } else {
                                 comissao = calcularEObterComissaoMensal(ano, mes, usuario);
                         }
                 }
-                BigDecimal faturamentoTotal = comissao.getFaturamentoMensalTotal();
 
                 // 2. Calcular Imposto (usar alíquota configurada na empresa, default 6%)
                 BigDecimal aliquota = (empresaFresh != null && empresaFresh.getAliquotaImposto() != null)

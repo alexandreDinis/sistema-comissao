@@ -107,4 +107,27 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
         BigDecimal sumByRecebimentoBefore(
                         @Param("empresa") Empresa empresa,
                         @Param("data") LocalDate data);
+
+        // ========================================================
+        // REGIME DE COMPETÊNCIA: Para Relatórios Financeiros (DRE)
+        // Usa dataCompetencia (data da OS) independente de status
+        // ========================================================
+
+        // Soma por competência para empresa (DRE)
+        @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaReceber c " +
+                        "WHERE c.empresa = :empresa AND c.dataCompetencia BETWEEN :inicio AND :fim")
+        BigDecimal sumByCompetenciaBetweenForReports(
+                        @Param("empresa") Empresa empresa,
+                        @Param("inicio") LocalDate inicio,
+                        @Param("fim") LocalDate fim);
+
+        // Soma por competência e funcionário (DRE modo INDIVIDUAL)
+        @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaReceber c " +
+                        "WHERE c.empresa = :empresa AND c.funcionarioResponsavel = :funcionario " +
+                        "AND c.dataCompetencia BETWEEN :inicio AND :fim")
+        BigDecimal sumByCompetenciaBetweenAndFuncionarioForReports(
+                        @Param("empresa") Empresa empresa,
+                        @Param("funcionario") User funcionario,
+                        @Param("inicio") LocalDate inicio,
+                        @Param("fim") LocalDate fim);
 }

@@ -111,10 +111,23 @@ public class FaturaService {
             return;
         }
 
-        // 1. Calcular o TOTAL de despesas do mês inteiro
-        YearMonth ym = YearMonth.parse(fatura.getMesReferencia(), MES_FORMATTER);
-        LocalDate inicio = ym.atDay(1);
-        LocalDate fim = ym.atEndOfMonth();
+        // 1. Calcular o PERÍODO DO CICLO (Fechamento anterior + 1 dia ATÉ Fechamento
+        // atual)
+        YearMonth mesFaturaYM = YearMonth.parse(fatura.getMesReferencia(), MES_FORMATTER);
+
+        // Dia de fechamento configurado (ex: 27)
+        int diaFechamento = fatura.getCartao().getDiaFechamento() != null ? fatura.getCartao().getDiaFechamento() : 25;
+
+        // Data Fim = Fechamento do mês atual (Safeguard para Fev/30 dias)
+        LocalDate fim = mesFaturaYM.atDay(Math.min(diaFechamento, mesFaturaYM.lengthOfMonth()));
+
+        // Data Início = Fechamento do mês anterior + 1 dia
+        YearMonth mesAnteriorYM = mesFaturaYM.minusMonths(1);
+        LocalDate fechamentoAnterior = mesAnteriorYM.atDay(Math.min(diaFechamento, mesAnteriorYM.lengthOfMonth()));
+        LocalDate inicio = fechamentoAnterior.plusDays(1);
+
+        log.info("📊 Calculando fatura {} ({}) - Ciclo: {} a {}",
+                fatura.getId(), fatura.getMesReferencia(), inicio, fim);
 
         BigDecimal totalDespesas = despesaRepository.sumByCartaoAndPeriodo(
                 fatura.getCartao(), inicio, fim);
@@ -123,7 +136,12 @@ public class FaturaService {
             totalDespesas = BigDecimal.ZERO;
         }
 
-        // 2. Calcular o TOTAL já pago em faturas FECHADAS/PAGAS deste mesmo mês
+        // 2. Calcular o TOTAL já pago em faturas FECHADAS/PAGAS deste mesmo CICLO/MÊS
+        // REFERÊNCIA
+        // Nota: O filtro por MesReferencia no repository já deve cobrir isso se estiver
+        // correto,
+        // mas mantemos a logica original de verificar o que já foi baixado para esta
+        // referência.
         BigDecimal totalJaPago = contaPagarRepository.sumValorPagoByCartaoAndMes(
                 fatura.getCartao(), fatura.getMesReferencia(), StatusConta.PAGO);
 
@@ -132,12 +150,6 @@ public class FaturaService {
         }
 
         // 3. O valor desta fatura deve ser o saldo restante
-        // Se houver outras faturas PENDENTES no mesmo mês (o que seria estranho, mas
-        // possível em concorrência),
-        // este cálculo assume que esta é a única pendente que está sendo ajustada.
-        // O ideal é subtrair também o valor de OUTRAS faturas pendentes, mas vamos
-        // assumir fluxo sequencial.
-
         BigDecimal saldoRestante = totalDespesas.subtract(totalJaPago);
 
         if (saldoRestante.compareTo(BigDecimal.ZERO) < 0) {

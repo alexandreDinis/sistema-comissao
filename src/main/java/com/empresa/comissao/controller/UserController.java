@@ -70,6 +70,38 @@ public class UserController {
                         user.getEmpresa() != null ? user.getEmpresa().getId() : null, user.isParticipaComissao()));
     }
 
+    /**
+     * Endpoint para listar usuários da equipe (mesma empresa).
+     * Qualquer usuário autenticado pode acessar para selecionar responsável em OS.
+     */
+    @GetMapping("/equipe")
+    public ResponseEntity<List<UserResponse>> getEquipe(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+
+        if (principal == null || principal.getEmpresa() == null) {
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
+
+        // Retorna todos os usuários ativos da mesma empresa
+        java.util.List<User> users = repository.findByEmpresa(principal.getEmpresa())
+                .stream()
+                .filter(User::isActive)
+                .collect(java.util.stream.Collectors.toList());
+
+        java.util.List<UserResponse> response = users.stream()
+                .map(u -> new UserResponse(
+                        u.getId(),
+                        u.getEmail(),
+                        u.getRole(),
+                        u.isActive(),
+                        java.util.Collections.emptySet(), // Não expõe features para funcionários
+                        u.getEmpresa() != null ? u.getEmpresa().getId() : null,
+                        u.isParticipaComissao()))
+                .collect(java.util.stream.Collectors.toList());
+
+        return ResponseEntity.ok(response);
+    }
+
     @lombok.Data
     @lombok.AllArgsConstructor
     static class UserResponse {
