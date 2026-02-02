@@ -74,6 +74,10 @@ public class OrdemServico {
     @Builder.Default
     private BigDecimal valorTotal = BigDecimal.ZERO;
 
+    // Offline Sync Idempotency
+    @Column(name = "local_id")
+    private String localId;
+
     @OneToMany(mappedBy = "ordemServico", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<VeiculoServico> veiculos = new ArrayList<>();

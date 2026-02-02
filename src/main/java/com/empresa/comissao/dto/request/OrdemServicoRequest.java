@@ -17,6 +17,9 @@ public class OrdemServicoRequest {
     @NotNull(message = "Data é obrigatória")
     private LocalDate data;
 
+    // Offline Sync
+    private String localId;
+
     // Optional discount fields
     private TipoDesconto tipoDesconto;
 
