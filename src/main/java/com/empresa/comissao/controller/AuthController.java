@@ -112,6 +112,14 @@ public class AuthController {
                                 .build());
         }
 
+        @PostMapping("/logout")
+        public ResponseEntity<?> logout() {
+                // In a stateless JWT architecture, the server doesn't track sessions.
+                // The client simply discards the token.
+                // We return 200 OK to confirm the request was received.
+                return ResponseEntity.ok(java.util.Map.of("message", "Logout realizado com sucesso"));
+        }
+
         private final com.empresa.comissao.service.PasswordResetService passwordResetService;
 
         @PostMapping("/forgot-password")
