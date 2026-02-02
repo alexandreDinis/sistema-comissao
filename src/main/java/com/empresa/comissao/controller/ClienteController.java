@@ -29,12 +29,18 @@ public class ClienteController {
     }
 
     @GetMapping
-    @Operation(summary = "Listar clientes", description = "Listagem com suporte a filtros")
+    @Operation(summary = "Listar clientes", description = "Listagem com suporte a filtros e Delta Sync (?since=ISO8601)")
     public ResponseEntity<List<ClienteResponse>> listar(
             @RequestParam(required = false) String termo,
             @RequestParam(required = false) String cidade,
             @RequestParam(required = false) String bairro,
-            @RequestParam(required = false) com.empresa.comissao.domain.enums.StatusCliente status) {
+            @RequestParam(required = false) com.empresa.comissao.domain.enums.StatusCliente status,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime since) {
+
+        if (since != null) {
+            return ResponseEntity.ok(clienteService.listarSync(since));
+        }
+
         return ResponseEntity.ok(clienteService.listar(termo, cidade, bairro, status));
     }
 

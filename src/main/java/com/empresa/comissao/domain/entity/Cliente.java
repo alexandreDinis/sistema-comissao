@@ -58,4 +58,14 @@ public class Cliente {
     @JoinColumn(name = "empresa_id")
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa;
+
+    @Column(name = "local_id", nullable = false, unique = true)
+    private String localId;
+
+    @Column(name = "deleted_at")
+    private java.time.LocalDateTime deletedAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
 }
