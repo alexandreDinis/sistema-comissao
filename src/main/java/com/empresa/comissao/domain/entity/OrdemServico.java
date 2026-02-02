@@ -85,6 +85,13 @@ public class OrdemServico {
     @Column(name = "updated_at")
     private java.time.LocalDateTime updatedAt;
 
+    @PrePersist
+    public void prePersist() {
+        if (this.localId == null) {
+            this.localId = java.util.UUID.randomUUID().toString();
+        }
+    }
+
     @OneToMany(mappedBy = "ordemServico", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<VeiculoServico> veiculos = new ArrayList<>();

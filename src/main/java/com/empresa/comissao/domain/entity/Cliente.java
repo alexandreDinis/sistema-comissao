@@ -68,4 +68,11 @@ public class Cliente {
     @org.hibernate.annotations.UpdateTimestamp
     @Column(name = "updated_at")
     private java.time.LocalDateTime updatedAt;
+
+    @PrePersist
+    public void prePersist() {
+        if (this.localId == null) {
+            this.localId = java.util.UUID.randomUUID().toString();
+        }
+    }
 }

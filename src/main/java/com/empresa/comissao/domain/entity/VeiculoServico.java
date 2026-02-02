@@ -49,6 +49,13 @@ public class VeiculoServico {
     @Column(name = "updated_at")
     private java.time.LocalDateTime updatedAt;
 
+    @PrePersist
+    public void prePersist() {
+        if (this.localId == null) {
+            this.localId = java.util.UUID.randomUUID().toString();
+        }
+    }
+
     public void recalcularTotal() {
         this.valorTotal = pecas.stream()
                 .map(PecaServico::getValor)

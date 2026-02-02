@@ -67,6 +67,9 @@ public class Despesa {
     protected void onCreate() {
         dataCriacao = LocalDateTime.now();
         dataAtualizacao = LocalDateTime.now();
+        if (this.localId == null) {
+            this.localId = java.util.UUID.randomUUID().toString();
+        }
     }
 
     @PreUpdate
