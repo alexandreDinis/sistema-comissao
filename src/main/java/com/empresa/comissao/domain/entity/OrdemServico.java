@@ -75,8 +75,22 @@ public class OrdemServico {
     private BigDecimal valorTotal = BigDecimal.ZERO;
 
     // Offline Sync Idempotency
-    @Column(name = "local_id")
+    @Column(name = "local_id", nullable = false, unique = true)
     private String localId;
+
+    @Column(name = "deleted_at")
+    private java.time.LocalDateTime deletedAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
+
+    @PrePersist
+    public void prePersist() {
+        if (this.localId == null) {
+            this.localId = java.util.UUID.randomUUID().toString();
+        }
+    }
 
     @OneToMany(mappedBy = "ordemServico", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

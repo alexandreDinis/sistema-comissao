@@ -101,6 +101,30 @@ public class ClienteService {
         return listar(null, null, null, null);
     }
 
+    public List<ClienteResponse> listarSync(java.time.LocalDateTime since) {
+        List<Cliente> clientes;
+        if (since != null) {
+            clientes = clienteRepository.findSyncData(since);
+        } else {
+            // Se since for nulo, retorna todos (padrão antigo ou sync inicial)
+            // CUIDADO: Em produção real, deve-se paginar. Para MVP/Mobile, ok.
+            clientes = clienteRepository.findAll();
+        }
+
+        // Ensure tenant scope valid
+        User user = getCurrentUser();
+        if (user != null && user.getEmpresa() != null) {
+            final Long empresaId = user.getEmpresa().getId();
+            clientes = clientes.stream()
+                    .filter(c -> c.getEmpresa() != null && c.getEmpresa().getId().equals(empresaId))
+                    .collect(Collectors.toList());
+        }
+
+        return clientes.stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     private void updateEntity(Cliente c, ClienteRequest r) {
         c.setRazaoSocial(r.getRazaoSocial());
         c.setNomeFantasia(r.getNomeFantasia());
@@ -144,6 +168,9 @@ public class ClienteService {
                 .cidade(c.getCidade())
                 .estado(c.getEstado())
                 .cep(c.getCep())
+                .localId(c.getLocalId())
+                .deletedAt(c.getDeletedAt())
+                .updatedAt(c.getUpdatedAt())
                 .build();
     }
 

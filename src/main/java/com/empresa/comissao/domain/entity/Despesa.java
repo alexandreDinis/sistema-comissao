@@ -42,6 +42,16 @@ public class Despesa {
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa;
 
+    @Column(name = "local_id", nullable = false, unique = true)
+    private String localId;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cartao_id")
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
@@ -57,6 +67,9 @@ public class Despesa {
     protected void onCreate() {
         dataCriacao = LocalDateTime.now();
         dataAtualizacao = LocalDateTime.now();
+        if (this.localId == null) {
+            this.localId = java.util.UUID.randomUUID().toString();
+        }
     }
 
     @PreUpdate

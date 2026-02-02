@@ -23,4 +23,8 @@ public class ClienteResponse {
     private String cidade;
     private String estado;
     private String cep;
+
+    private String localId;
+    private java.time.LocalDateTime deletedAt;
+    private java.time.LocalDateTime updatedAt;
 }
