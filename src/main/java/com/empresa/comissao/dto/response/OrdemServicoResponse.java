@@ -31,4 +31,9 @@ public class OrdemServicoResponse {
     private Long usuarioId;
     private String usuarioNome;
     private String usuarioEmail;
+
+    // Sync Fields
+    private String localId;
+    private java.time.LocalDateTime deletedAt;
+    private java.time.LocalDateTime updatedAt;
 }

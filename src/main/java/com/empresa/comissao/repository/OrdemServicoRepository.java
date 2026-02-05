@@ -47,4 +47,9 @@ public interface OrdemServicoRepository extends JpaRepository<OrdemServico, Long
                         @org.springframework.data.repository.query.Param("ano") int ano,
                         @org.springframework.data.repository.query.Param("mes") Integer mes);
 
+        @org.springframework.data.jpa.repository.Query("SELECT os FROM OrdemServico os WHERE os.updatedAt > :since AND os.empresa.id = :empresaId")
+        List<OrdemServico> findSyncData(
+                        @org.springframework.data.repository.query.Param("empresaId") Long empresaId,
+                        @org.springframework.data.repository.query.Param("since") java.time.LocalDateTime since);
+
 }

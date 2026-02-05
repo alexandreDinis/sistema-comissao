@@ -56,9 +56,10 @@ public class OrdemServicoController {
     }
 
     @GetMapping
-    @Operation(summary = "Listar todas as OS")
-    public ResponseEntity<java.util.List<OrdemServicoResponse>> listarTodas() {
-        return ResponseEntity.ok(osService.listarTodas());
+    @Operation(summary = "Listar todas as OS", description = "Suporte a Delta Sync (?since=ISO8601)")
+    public ResponseEntity<java.util.List<OrdemServicoResponse>> listarTodas(
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime since) {
+        return ResponseEntity.ok(osService.listarSync(since));
     }
 
     @PatchMapping("/{id}/status")

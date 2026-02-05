@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 @RestController
 @RequestMapping("/api/v1/despesas")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Despesas", description = "Endpoints para gerenciamento de gastos (alimentação, combustível, etc.)")
 public class DespesaController {
 
@@ -74,6 +76,91 @@ public class DespesaController {
         }
 
         return ResponseEntity.ok(salva);
+    }
+
+    @PostMapping("/parcelada")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Registrar despesa parcelada", description = "Cria múltiplas parcelas de uma compra no cartão de crédito, distribuídas ao longo dos meses")
+    public ResponseEntity<List<Despesa>> criarParcelada(
+            @Valid @RequestBody DespesaRequestDTO request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+
+        // Validações
+        if (request.getCartaoId() == null) {
+            throw new com.empresa.comissao.exception.BusinessException(
+                    "Parcelamento só é permitido em compras no cartão de crédito");
+        }
+
+        if (request.getNumeroParcelas() == null || request.getNumeroParcelas() < 1) {
+            throw new com.empresa.comissao.exception.BusinessException(
+                    "Número de parcelas inválido. Deve ser entre 1 e 12");
+        }
+
+        if (request.getNumeroParcelas() > 12) {
+            throw new com.empresa.comissao.exception.BusinessException(
+                    "Número máximo de parcelas é 12");
+        }
+
+        // Buscar cartão
+        com.empresa.comissao.domain.entity.CartaoCredito cartao = cartaoRepository
+                .findById(request.getCartaoId())
+                .orElseThrow(() -> new com.empresa.comissao.exception.BusinessException("Cartão não encontrado"));
+
+        // Validar limite total (valor completo da compra)
+        faturaService.validarLimiteDisponivel(cartao, request.getValor());
+
+        // Calcular valor de cada parcela
+        java.math.BigDecimal valorParcela = request.getValor()
+                .divide(java.math.BigDecimal.valueOf(request.getNumeroParcelas()), 2, java.math.RoundingMode.HALF_UP);
+
+        java.time.LocalDate dataCompra = request.getDataDespesa();
+        java.util.List<Despesa> parcelas = new java.util.ArrayList<>();
+        Despesa despesaPai = null;
+
+        // Criar cada parcela
+        for (int i = 1; i <= request.getNumeroParcelas(); i++) {
+            // Calcular data da parcela (cada parcela vai para um mês diferente)
+            java.time.LocalDate dataParcela = dataCompra.plusMonths(i - 1);
+
+            // Criar despesa da parcela
+            Despesa despesa = Despesa.builder()
+                    .dataDespesa(dataParcela)
+                    .valor(valorParcela)
+                    .categoria(request.getCategoria())
+                    .descricao(request.getDescricao() + " - Parcela " + i + "/" + request.getNumeroParcelas())
+                    .empresa(usuario.getEmpresa())
+                    .cartao(cartao)
+                    .parcelado(true)
+                    .numeroParcelas(request.getNumeroParcelas())
+                    .parcelaAtual(i)
+                    .build();
+
+            // Primeira parcela é a "pai"
+            if (i == 1) {
+                despesaPai = despesaRepository.save(despesa);
+                parcelas.add(despesaPai);
+
+                // Adicionar à fatura do cartão
+                com.empresa.comissao.domain.entity.ContaPagar fatura = faturaService.buscarOuCriarFatura(cartao,
+                        dataParcela);
+                faturaService.atualizarValorFatura(fatura);
+            } else {
+                // Vincular à despesa pai
+                despesa.setDespesaPai(despesaPai);
+                Despesa parcelaSalva = despesaRepository.save(despesa);
+                parcelas.add(parcelaSalva);
+
+                // Adicionar à fatura do cartão do mês correspondente
+                com.empresa.comissao.domain.entity.ContaPagar fatura = faturaService.buscarOuCriarFatura(cartao,
+                        dataParcela);
+                faturaService.atualizarValorFatura(fatura);
+            }
+        }
+
+        log.info("✅ Despesa parcelada criada: {} parcelas de R$ {} = Total R$ {}",
+                request.getNumeroParcelas(), valorParcela, request.getValor());
+
+        return ResponseEntity.ok(parcelas);
     }
 
     @GetMapping
