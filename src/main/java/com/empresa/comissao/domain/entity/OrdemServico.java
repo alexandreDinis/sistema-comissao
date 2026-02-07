@@ -94,7 +94,9 @@ public class OrdemServico {
 
     @OneToMany(mappedBy = "ordemServico", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<VeiculoServico> veiculos = new ArrayList<>();
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
+    private java.util.Set<VeiculoServico> veiculos = new java.util.LinkedHashSet<>();
 
     public void recalcularTotal() {
         // Calculate total without discount

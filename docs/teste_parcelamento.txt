@@ -1,0 +1,53 @@
+-- Exemplo de teste do endpoint de parcelamento
+-- Usar este payload no Postman ou cURL
+
+POST http://localhost:8080/api/v1/despesas/parcelada
+Content-Type: application/json
+Authorization: Bearer {seu_token}
+
+{
+  "dataDespesa": "2026-02-04",
+  "valor": 1200.00,
+  "categoria": "ALIMENTACAO",
+  "descricao": "Compra no Supermercado",
+  "pagoAgora": false,
+  "cartaoId": 1,
+  "numeroParcelas": 3
+}
+
+-- Resultado esperado:
+-- 3 despesas criadas:
+-- Parcela 1/3: R$ 400,00 em 04/02/2026 (Fev)
+-- Parcela 2/3: R$ 400,00 em 04/03/2026 (Mar)
+-- Parcela 3/3: R$ 400,00 em 04/04/2026 (Abr)
+
+-- Cada parcela vai para a fatura do cartão do mês correspondente
+-- Todas as parcelas estão linkadas via despesa_pai_id
+
+-- Comando cURL para teste:
+curl -X POST http://localhost:8080/api/v1/despesas/parcelada \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI" \
+  -d '{
+    "dataDespesa": "2026-02-04",
+    "valor": 1200.00,
+    "categoria": "ALIMENTACAO",
+    "descricao": "Compra no Supermercado",
+    "pagoAgora": false,
+    "cartaoId": 1,
+    "numeroParcelas": 3
+  }'
+  
+-- Verificar no banco de dados:
+SELECT 
+  id,
+  descricao,
+  valor,
+  data_despesa,
+  parcelado,
+  numero_parcelas,
+  parcela_atual,
+  despesa_pai_id
+FROM despesas
+WHERE parcelado = true
+ORDER BY despesa_pai_id, parcela_atual;

@@ -33,6 +33,7 @@ public class FinanceiroService {
 
         private final ContaPagarRepository contaPagarRepository;
         private final ContaReceberRepository contaReceberRepository;
+        private final com.empresa.comissao.repository.FaturamentoRepository faturamentoRepository;
         private final ComissaoService comissaoService;
 
         // ========================================
@@ -891,5 +892,15 @@ public class FinanceiroService {
                 public BigDecimal getSaldoProjetado() {
                         return totalAReceber.subtract(totalAPagar);
                 }
+        }
+
+        /**
+         * Busca faturamento por ID com grafo completo (otimizado).
+         * Evita N+1 queries ao carregar detalhes da OS, veículos e peças.
+         */
+        @Transactional(readOnly = true)
+        public java.util.Optional<Faturamento> getFaturamentoDetalhado(Long id) {
+                log.info("[FETCH_PLAN] faturamento-details joinfetch ON");
+                return faturamentoRepository.findByIdComGrafoCompleto(id);
         }
 }

@@ -6,8 +6,6 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "veiculos_servico")
@@ -28,6 +26,8 @@ public class VeiculoServico {
     @ManyToOne(optional = false)
     @JoinColumn(name = "ordem_servico_id")
     @com.fasterxml.jackson.annotation.JsonIgnore
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
     private OrdemServico ordemServico;
 
     // Persisted total for performance
@@ -37,7 +37,9 @@ public class VeiculoServico {
 
     @OneToMany(mappedBy = "veiculo", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<PecaServico> pecas = new ArrayList<>();
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
+    private java.util.Set<PecaServico> pecas = new java.util.LinkedHashSet<>();
 
     @Column(name = "local_id", nullable = false, unique = true)
     private String localId;

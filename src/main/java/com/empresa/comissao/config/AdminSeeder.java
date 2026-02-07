@@ -69,10 +69,9 @@ public class AdminSeeder {
                     repository.save(superUser);
                     log.info("✅ Super Admin created. Email: {}", superEmail);
                 } else {
-                    log.info("ℹ️ Super Admin already exists. Updating password to ensure correctness.");
-                    superUser.setPassword(passwordEncoder.encode("47548971"));
-                    repository.save(superUser);
-                    log.info("✅ Super Admin password updated.");
+                    log.info("ℹ️ Super Admin already exists. Skipping password reset to preserve custom password.");
+                    // ⚠️ NÃO resetar a senha aqui! Se o usuário já trocou, deve manter a senha
+                    // dele.
                 }
 
             } catch (Exception e) {

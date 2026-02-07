@@ -1,0 +1,5 @@
+commit 5055dc70256750c22cc3b255df5bf4c09e5f11a9
+Author: alexandreDinis <dinisde@gmail.com>
+Date:   Mon Feb 2 19:06:12 2026 -0300
+
+    feat: mobile interface implementation

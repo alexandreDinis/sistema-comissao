@@ -21,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class FaturamentoController {
 
     private final ComissaoService comissaoService;
+    private final com.empresa.comissao.service.FinanceiroService financeiroService;
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -36,6 +37,16 @@ public class FaturamentoController {
     public ResponseEntity<List<Faturamento>> listar(
             @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
         return ResponseEntity.ok(comissaoService.listarFaturamentos(usuario != null ? usuario.getEmpresa() : null));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<Faturamento> buscarPorId(@PathVariable Long id) {
+        // Usa o serviço financeiro que já chama o repositório com JOIN FETCH
+        // (findByIdComGrafoCompleto)
+        return financeiroService.getFaturamentoDetalhado(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @Getter

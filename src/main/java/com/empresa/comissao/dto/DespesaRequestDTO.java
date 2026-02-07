@@ -30,4 +30,6 @@ public class DespesaRequestDTO {
     private com.empresa.comissao.domain.enums.MeioPagamento meioPagamento;
 
     private Long cartaoId; // ID do cartão de crédito (se aplicável)
+
+    private Integer numeroParcelas; // Número de parcelas (null = à vista)
 }
