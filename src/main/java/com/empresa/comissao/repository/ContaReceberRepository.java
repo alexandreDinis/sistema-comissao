@@ -20,11 +20,30 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
         // Buscar por empresa e status
         List<ContaReceber> findByEmpresaAndStatus(Empresa empresa, StatusConta status);
 
-        // Buscar por empresa ordenado por vencimento
-        List<ContaReceber> findByEmpresaOrderByDataVencimentoAsc(Empresa empresa);
+        // Buscar por empresa ordenado por vencimento (Optimized)
+        @Query("SELECT DISTINCT c FROM ContaReceber c " +
+                        "JOIN FETCH c.ordemServico os " +
+                        "JOIN FETCH os.cliente " +
+                        "LEFT JOIN FETCH os.veiculos v " +
+                        "LEFT JOIN FETCH v.pecas " +
+                        "LEFT JOIN FETCH c.faturamento " +
+                        "WHERE c.empresa = :empresa " +
+                        "ORDER BY c.dataVencimento ASC")
+        List<ContaReceber> findByEmpresaOrderByDataVencimentoAsc(@Param("empresa") Empresa empresa);
 
-        // Buscar pendentes por empresa
-        List<ContaReceber> findByEmpresaAndStatusOrderByDataVencimentoAsc(Empresa empresa, StatusConta status);
+        // Buscar pendentes por empresa (Optimized)
+        @Query("SELECT DISTINCT c FROM ContaReceber c " +
+                        "JOIN FETCH c.ordemServico os " +
+                        "JOIN FETCH os.cliente " +
+                        "LEFT JOIN FETCH os.veiculos v " +
+                        "LEFT JOIN FETCH v.pecas " +
+                        "LEFT JOIN FETCH c.faturamento " +
+                        "WHERE c.empresa = :empresa " +
+                        "AND c.status = :status " +
+                        "ORDER BY c.dataVencimento ASC")
+        List<ContaReceber> findByEmpresaAndStatusOrderByDataVencimentoAsc(
+                        @Param("empresa") Empresa empresa,
+                        @Param("status") StatusConta status);
 
         // Buscar por funcionário responsável (para comissão individual)
         List<ContaReceber> findByFuncionarioResponsavelAndEmpresaOrderByDataRecebimentoAsc(User funcionario,
@@ -82,9 +101,16 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
                         @Param("inicio") LocalDate inicio,
                         @Param("fim") LocalDate fim);
 
-        // Buscar recebidos por período (para fluxo de caixa)
-        @Query("SELECT c FROM ContaReceber c WHERE c.empresa = :empresa " +
-                        "AND c.dataRecebimento BETWEEN :inicio AND :fim AND c.status = 'PAGO' ORDER BY c.dataRecebimento")
+        // Buscar recebidos por período (para fluxo de caixa) - COM JOIN FETCH OTIMIZADO
+        @Query("SELECT DISTINCT c FROM ContaReceber c " +
+                        "LEFT JOIN FETCH c.ordemServico os " +
+                        "LEFT JOIN FETCH os.cliente " +
+                        "LEFT JOIN FETCH os.veiculos v " +
+                        "LEFT JOIN FETCH v.pecas " +
+                        "LEFT JOIN FETCH c.faturamento f " +
+                        "WHERE c.empresa = :empresa " +
+                        "AND c.dataRecebimento BETWEEN :inicio AND :fim AND c.status = 'PAGO' " +
+                        "ORDER BY c.dataRecebimento")
         List<ContaReceber> findRecebidosBetween(
                         @Param("empresa") Empresa empresa,
                         @Param("inicio") LocalDate inicio,

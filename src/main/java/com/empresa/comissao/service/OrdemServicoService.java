@@ -451,7 +451,7 @@ public class OrdemServicoService {
                                 if (since != null) {
                                         list = osRepository.findSyncData(usuario.getEmpresa().getId(), since);
                                 } else {
-                                        list = osRepository.findByEmpresa(usuario.getEmpresa());
+                                        list = osRepository.findAllFullSync(usuario.getEmpresa().getId());
                                 }
                                 return list.stream().map(this::mapToResponse).collect(Collectors.toList());
                         }

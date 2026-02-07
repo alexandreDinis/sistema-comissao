@@ -29,6 +29,18 @@ public interface FaturamentoRepository extends JpaRepository<Faturamento, Long> 
         Optional<BigDecimal> sumValorByDataFaturamentoBetweenAndEmpresa(@Param("startDate") LocalDate startDate,
                         @Param("endDate") LocalDate endDate, @Param("empresa") Empresa empresa);
 
+        // OTIMIZACAO PARA DASHBOARD FINANCEIRO (Evita N+1 ao carregar OS e veículos)
+        // Usa Set nas entidades para permitir múltiplos JOIN FETCH
+        @Query("SELECT DISTINCT f FROM Faturamento f " +
+                        "LEFT JOIN FETCH f.ordemServico os " +
+                        "LEFT JOIN FETCH os.cliente " +
+                        "LEFT JOIN FETCH os.veiculos v " +
+                        "LEFT JOIN FETCH v.pecas p " +
+                        "LEFT JOIN FETCH p.tipoPeca " +
+                        "WHERE f.empresa = :empresa " +
+                        "ORDER BY f.dataFaturamento DESC")
+        List<Faturamento> findAllWithRelations(@Param("empresa") Empresa empresa);
+
         List<Faturamento> findByEmpresa(Empresa empresa);
 
         // YoY Comparison Queries
@@ -52,4 +64,13 @@ public interface FaturamentoRepository extends JpaRepository<Faturamento, Long> 
         List<Object[]> findFaturamentoMensalByAnoAndEmpresa(@Param("ano") int ano, @Param("empresa") Empresa empresa);
 
         Optional<Faturamento> findByOrdemServico(com.empresa.comissao.domain.entity.OrdemServico ordemServico);
+
+        @Query("SELECT DISTINCT f FROM Faturamento f " +
+                        "LEFT JOIN FETCH f.ordemServico os " +
+                        "LEFT JOIN FETCH os.cliente " +
+                        "LEFT JOIN FETCH os.veiculos v " +
+                        "LEFT JOIN FETCH v.pecas p " +
+                        "LEFT JOIN FETCH p.tipoPeca " +
+                        "WHERE f.id = :id")
+        Optional<Faturamento> findByIdComGrafoCompleto(@Param("id") Long id);
 }
