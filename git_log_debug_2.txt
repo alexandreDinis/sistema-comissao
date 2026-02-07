@@ -1,0 +1,78 @@
+commit 5055dc70256750c22cc3b255df5bf4c09e5f11a9
+Author: alexandreDinis <dinisde@gmail.com>
+Date:   Mon Feb 2 19:06:12 2026 -0300
+
+    feat: mobile interface implementation
+
+ .gitignore                                         |   4 +
+ sistema-com-native/jest.config.js                  |   8 +
+ sistema-com-native/package-lock.json               |  31 ++-
+ sistema-com-native/package.json                    |   7 +-
+ .../src/components/forms/PlateInput.tsx            | 136 +++++++----
+ sistema-com-native/src/navigation/TabNavigator.tsx |  11 +-
+ sistema-com-native/src/screens/DashboardScreen.tsx |   9 +-
+ .../src/screens/MyCommissionsScreen.tsx            |  36 ++-
+ sistema-com-native/src/screens/OSDetailsScreen.tsx |  20 +-
+ sistema-com-native/src/screens/OSListScreen.tsx    |   9 +-
+ sistema-com-native/src/services/clienteService.ts  |  98 ++++++--
+ .../src/services/database/DatabaseService.ts       |  89 +++++---
+ .../src/services/database/migrations.ts            | 101 ++++++++-
+ .../src/services/database/models/ClienteModel.ts   | 111 ++++++---
+ .../src/services/database/models/DespesaModel.ts   |  70 +++++-
+ .../src/services/database/models/OSModel.ts        | 102 ++++++---
+ .../src/services/database/models/VeiculoModel.ts   |  15 +-
+ .../src/services/database/models/types.ts          |   4 +
+ sistema-com-native/src/services/despesaService.ts  |  28 ++-
+ sistema-com-native/src/services/osService.ts       | 250 +++++++++++++++++----
+ sistema-com-native/src/services/sync/SyncEngine.ts | 226 +++++++++----------
+ .../src/services/sync/__tests__/SyncEngine.test.ts | 200 +++++++++++++++++
+ sistema-com-native/src/types/uuid.d.ts             |   3 +
+ sistema-com-native/src/utils/debounce.ts           |  10 +
+ sistema-com-native/src/utils/uuid.ts               |  25 +++
+ src/App.tsx                                        |   4 +-
+ src/components/common/AppHeader.tsx                |   4 +-
+ src/components/common/UserMenu.tsx                 |  57 ++++-
+ src/components/forms/DespesaForm.tsx               |   2 +
+ src/components/reports/RelatorioConsolidado.tsx    |   1 +
+ src/hooks/useIsMobile.ts                           |  22 ++
+ src/index.css                                      |   9 +
+ src/layouts/MobileLayout.tsx                       | 148 ++++++++++++
+ src/layouts/ResponsiveLayout.tsx                   |  33 +++
+ src/pages/os/OSDetailsPage.tsx                     |  34 ++-
+ src/pages/os/OSListPage.tsx                        |  58 ++---
+ src/pages/settings/GestaoComissoesPage.tsx         |  62 ++++-
+ src/services/userService.ts                        |   9 +
+ src/types/index.ts                                 |   2 +-
+ 39 files changed, 1653 insertions(+), 395 deletions(-)
+
+commit d07c473e5b33f83d9015bf9e44c9ad45591b2946
+Author: alexandreDinis <dinisde@gmail.com>
+Date:   Sun Feb 1 18:39:59 2026 -0300
+
+    muda versao do app pronto para producao
+
+ sistema-com-native/.env                            |    3 +
+ sistema-com-native/.env.example                    |    3 +
+ sistema-com-native/App.tsx                         |   47 +-
+ sistema-com-native/app.config.js                   |   48 +
+ sistema-com-native/app.json                        |   30 -
+ sistema-com-native/assets/custom-icon.jpg          |  Bin 0 -> 64543 bytes
+ sistema-com-native/assets/logo-final.png           |  Bin 0 -> 925268 bytes
+ sistema-com-native/eas.json                        |   32 +
+ sistema-com-native/package-lock.json               | 3375 +++++++-------------
+ sistema-com-native/package.json                    |   21 +-
+ .../src/components/ui/OfflineIndicator.tsx         |   48 +-
+ sistema-com-native/src/contexts/AuthContext.tsx    |   18 +-
+ sistema-com-native/src/screens/ClientesScreen.tsx  |   10 +-
+ sistema-com-native/src/screens/DashboardScreen.tsx |   28 +-
+ .../src/screens/LancamentoScreen.tsx               |   17 +-
+ sistema-com-native/src/screens/LoginScreen.tsx     |  116 +-
+ .../src/screens/MyCommissionsScreen.tsx            |   50 +-
+ sistema-com-native/src/screens/OSListScreen.tsx    |    3 +-
+ sistema-com-native/src/services/api.ts             |  284 +-
+ sistema-com-native/src/services/authService.ts     |  294 +-
+ .../src/services/biometricService.ts               |   89 +
+ sistema-com-native/src/services/comissaoService.ts |   33 +-
+ sistema-com-native/src/utils/logger.ts             |  159 +
+ subPass                                            |   95 +
+ 24 files changed, 2447 insertions(+), 2356 deletions(-)

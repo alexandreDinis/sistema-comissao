@@ -33,7 +33,14 @@ public class PecaServico {
     @ManyToOne(optional = false)
     @JoinColumn(name = "veiculo_id")
     @com.fasterxml.jackson.annotation.JsonIgnore
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
     private VeiculoServico veiculo;
+
+    @Transient
+    @lombok.Builder.Default
+    @lombok.EqualsAndHashCode.Include
+    private java.util.UUID tempId = java.util.UUID.randomUUID();
 
     // ========================================
     // SERVIÇO TERCEIRIZADO

@@ -63,6 +63,22 @@ public class Despesa {
     @Column(name = "data_atualizacao")
     private LocalDateTime dataAtualizacao;
 
+    // Campos de parcelamento
+    @Builder.Default
+    @Column(name = "parcelado")
+    private Boolean parcelado = false;
+
+    @Column(name = "numero_parcelas")
+    private Integer numeroParcelas;
+
+    @Column(name = "parcela_atual")
+    private Integer parcelaAtual;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "despesa_pai_id")
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+    private Despesa despesaPai;
+
     @PrePersist
     protected void onCreate() {
         dataCriacao = LocalDateTime.now();

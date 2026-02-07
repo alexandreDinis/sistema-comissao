@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
@@ -432,6 +433,10 @@ public class OrdemServicoService {
         }
 
         public java.util.List<OrdemServicoResponse> listarTodas() {
+                return listarSync(null);
+        }
+
+        public java.util.List<OrdemServicoResponse> listarSync(java.time.LocalDateTime since) {
                 // Get current user's empresa for tenant filtering
                 org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
                                 .getContext().getAuthentication();
@@ -442,9 +447,13 @@ public class OrdemServicoService {
                                         .getPrincipal();
 
                         if (usuario.getEmpresa() != null) {
-                                return osRepository.findByEmpresa(usuario.getEmpresa()).stream()
-                                                .map(this::mapToResponse)
-                                                .collect(Collectors.toList());
+                                List<OrdemServico> list;
+                                if (since != null) {
+                                        list = osRepository.findSyncData(usuario.getEmpresa().getId(), since);
+                                } else {
+                                        list = osRepository.findAllFullSync(usuario.getEmpresa().getId());
+                                }
+                                return list.stream().map(this::mapToResponse).collect(Collectors.toList());
                         }
                 }
 
@@ -477,9 +486,11 @@ public class OrdemServicoService {
                                                 .contato(os.getCliente().getContato())
                                                 .build())
                                 .usuarioId(os.getUsuario() != null ? os.getUsuario().getId() : null)
-                                .usuarioNome(os.getUsuario() != null ? os.getUsuario().getEmail() : null)
                                 .usuarioEmail(os.getUsuario() != null ? os.getUsuario().getEmail() : null)
                                 .veiculos(os.getVeiculos().stream().map(this::mapVeiculo).collect(Collectors.toList()))
+                                .localId(os.getLocalId())
+                                .deletedAt(os.getDeletedAt())
+                                .updatedAt(os.getUpdatedAt())
                                 .build();
         }
 

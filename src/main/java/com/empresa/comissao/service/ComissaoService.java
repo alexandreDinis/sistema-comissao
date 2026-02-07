@@ -868,7 +868,8 @@ public class ComissaoService {
 
         public List<Faturamento> listarFaturamentos(com.empresa.comissao.domain.entity.Empresa empresa) {
                 if (empresa != null) {
-                        return faturamentoRepository.findByEmpresa(empresa);
+                        // USA QUERY OTIMIZADA COM JOIN FETCH
+                        return faturamentoRepository.findAllWithRelations(empresa);
                 }
                 return java.util.Collections.emptyList();
         }
