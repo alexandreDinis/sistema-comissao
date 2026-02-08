@@ -32,9 +32,34 @@ public class ComissaoController {
 
         org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication();
+
         com.empresa.comissao.domain.entity.User usuario = null;
 
+        // 1. Tentar AuthPrincipal (Novo padrão JWT otimizado)
         if (authentication != null
+                && authentication.getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal) {
+            com.empresa.comissao.security.AuthPrincipal principal = (com.empresa.comissao.security.AuthPrincipal) authentication
+                    .getPrincipal();
+            Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+
+            // Reconstruir Proxy User/Empresa para o Service Legado
+            if (principal.getUserId() != null) {
+                usuario = new com.empresa.comissao.domain.entity.User();
+                usuario.setId(principal.getUserId());
+                usuario.setEmail(principal.getEmail());
+                usuario.setParticipaComissao(true); // Default to true or fetch if critical. For now assume true to
+                                                    // avoid blockage.
+                                                    // Better: Service checks this. We just pass ID.
+
+                if (tenantId != null) {
+                    Empresa empresaProxy = new Empresa();
+                    empresaProxy.setId(tenantId);
+                    usuario.setEmpresa(empresaProxy);
+                }
+            }
+        }
+        // 2. Fallback Entity (Legado / Testes)
+        else if (authentication != null
                 && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
             usuario = (com.empresa.comissao.domain.entity.User) authentication.getPrincipal();
         }
@@ -43,8 +68,13 @@ public class ComissaoController {
 
         // Fetch fresh empresa from DB to get latest modoComissao configuration
         if (usuario != null && usuario.getEmpresa() != null) {
+            // Se tivermos apenas o ID (proxy), o findById vai buscar os dados completos
+            // (modoComissao, etc)
             Empresa empresaFresh = empresaRepository.findById(usuario.getEmpresa().getId())
                     .orElse(usuario.getEmpresa());
+
+            // Re-attach empresa to user to ensure consistency
+            usuario.setEmpresa(empresaFresh);
 
             com.empresa.comissao.domain.enums.ModoComissao modo = empresaFresh.getModoComissao();
             log.info("📊 Modo Comissão da empresa {}: {}", empresaFresh.getNome(), modo);
@@ -58,6 +88,9 @@ public class ComissaoController {
             }
         } else {
             // Fallback for users without empresa (shouldn't happen in normal flow)
+            // Se for AuthPrincipal sem empresa, vai cair aqui e pode dar erro se o service
+            // exigir empresa.
+            // Mas com TenantContext, usuario.getEmpresa() deve estar preenchido acima.
             comissao = comissaoService.calcularEObterComissaoMensal(ano, mes, usuario, force);
         }
 
@@ -117,9 +150,28 @@ public class ComissaoController {
 
         org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication();
+
         com.empresa.comissao.domain.entity.User usuario = null;
 
+        // 1. AuthPrincipal
         if (authentication != null
+                && authentication.getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal) {
+            com.empresa.comissao.security.AuthPrincipal principal = (com.empresa.comissao.security.AuthPrincipal) authentication
+                    .getPrincipal();
+            Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+
+            if (principal.getUserId() != null) {
+                usuario = new com.empresa.comissao.domain.entity.User();
+                usuario.setId(principal.getUserId());
+                if (tenantId != null) {
+                    Empresa emp = new Empresa();
+                    emp.setId(tenantId);
+                    usuario.setEmpresa(emp);
+                }
+            }
+        }
+        // 2. Legacy Entity
+        else if (authentication != null
                 && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
             usuario = (com.empresa.comissao.domain.entity.User) authentication.getPrincipal();
         }

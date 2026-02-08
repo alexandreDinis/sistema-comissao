@@ -896,18 +896,24 @@ public class ComissaoService {
                         com.empresa.comissao.domain.entity.User usuario,
                         com.empresa.comissao.domain.entity.Empresa empresa) {
 
-                log.info("📊 Calculando comparação YoY para {}/{} - Empresa: {}", ano, mes,
-                                empresa != null ? empresa.getNome() : "N/A");
+                // Prioritize the passed 'empresa' (likely a proxy from TenantContext)
+                com.empresa.comissao.domain.entity.Empresa empresaToUse = empresa;
 
-                // Safety check for SaaS admins
-                if (empresa == null && usuario != null && usuario.getEmpresa() == null) {
-                        throw new com.empresa.comissao.exception.BusinessException(
-                                        "Administradores de sistema não possuem dados de faturamento.");
+                if (empresaToUse == null && usuario != null) {
+                        empresaToUse = usuario.getEmpresa();
                 }
 
-                // Determine which empresa to use
-                com.empresa.comissao.domain.entity.Empresa empresaToUse = empresa != null ? empresa
-                                : (usuario != null ? usuario.getEmpresa() : null);
+                if (empresaToUse == null) {
+                        // Try to recover from context if still null (last resort)
+                        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+                        if (tenantId != null) {
+                                empresaToUse = new com.empresa.comissao.domain.entity.Empresa();
+                                empresaToUse.setId(tenantId);
+                        }
+                }
+
+                log.info("📊 Calculando comparação YoY para {}/{} - Empresa ID: {}", ano, mes,
+                                empresaToUse != null ? empresaToUse.getId() : "NULL");
 
                 if (empresaToUse == null) {
                         throw new com.empresa.comissao.exception.BusinessException(
@@ -915,13 +921,19 @@ public class ComissaoService {
                 }
 
                 // Get current year/month revenue
+                LocalDate inicio = LocalDate.of(ano, mes, 1);
+                LocalDate fim = inicio.withDayOfMonth(inicio.lengthOfMonth());
+
                 BigDecimal faturamentoAtual = faturamentoRepository
-                                .sumValorByAnoAndMesAndEmpresa(ano, mes, empresaToUse);
+                                .sumValorByDataBetweenAndEmpresa(inicio, fim, empresaToUse);
 
                 // Get previous year revenue for the same month
                 int anoAnterior = ano - 1;
+                LocalDate inicioAnterior = LocalDate.of(anoAnterior, mes, 1);
+                LocalDate fimAnterior = inicioAnterior.withDayOfMonth(inicioAnterior.lengthOfMonth());
+
                 BigDecimal faturamentoAnoAnterior = faturamentoRepository
-                                .sumValorByAnoAndMesAndEmpresa(anoAnterior, mes, empresaToUse);
+                                .sumValorByDataBetweenAndEmpresa(inicioAnterior, fimAnterior, empresaToUse);
 
                 boolean temDadosAnoAnterior = faturamentoAnoAnterior.compareTo(BigDecimal.ZERO) > 0;
 
@@ -981,8 +993,11 @@ public class ComissaoService {
                 }
 
                 // Get monthly revenue for current year
+                LocalDate inicioAno = LocalDate.of(ano, 1, 1);
+                LocalDate fimAno = LocalDate.of(ano, 12, 31);
+
                 List<Object[]> faturamentosMensais = faturamentoRepository
-                                .findFaturamentoMensalByAnoAndEmpresa(ano, empresaToUse);
+                                .findFaturamentoMensalByDataBetweenAndEmpresa(inicioAno, fimAno, empresaToUse);
 
                 // Build map for quick lookup
                 Map<Integer, BigDecimal> faturamentoPorMes = new java.util.HashMap<>();
@@ -994,8 +1009,12 @@ public class ComissaoService {
 
                 // Get previous year data
                 int anoAnterior = ano - 1;
+                LocalDate inicioAnoAnterior = LocalDate.of(anoAnterior, 1, 1);
+                LocalDate fimAnoAnterior = LocalDate.of(anoAnterior, 12, 31);
+
                 List<Object[]> faturamentosMensaisAnoAnterior = faturamentoRepository
-                                .findFaturamentoMensalByAnoAndEmpresa(anoAnterior, empresaToUse);
+                                .findFaturamentoMensalByDataBetweenAndEmpresa(inicioAnoAnterior, fimAnoAnterior,
+                                                empresaToUse);
 
                 Map<Integer, BigDecimal> faturamentoPorMesAnoAnterior = new java.util.HashMap<>();
                 for (Object[] row : faturamentosMensaisAnoAnterior) {
@@ -1084,7 +1103,18 @@ public class ComissaoService {
                 log.info("🏆 Gerando ranking de clientes para empresa: {} - Ano: {} - Mês: {}",
                                 empresaToUse.getNome(), ano, mes != null ? mes : "TODOS");
 
-                return ordemServicoRepository.findRankingClientes(empresaToUse.getId(), ano, mes);
+                LocalDate start;
+                LocalDate end;
+
+                if (mes != null) {
+                        start = LocalDate.of(ano, mes, 1);
+                        end = start.withDayOfMonth(start.lengthOfMonth());
+                } else {
+                        start = LocalDate.of(ano, 1, 1);
+                        end = LocalDate.of(ano, 12, 31);
+                }
+
+                return ordemServicoRepository.findRankingClientes(empresaToUse.getId(), start, end);
         }
 
         /**

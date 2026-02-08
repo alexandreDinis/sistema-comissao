@@ -55,11 +55,33 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getMe(java.security.Principal principal) {
-        if (principal == null) {
-            return ResponseEntity.notFound().build();
+    public ResponseEntity<UserResponse> getMe(org.springframework.security.core.Authentication authentication) {
+        if (authentication == null
+                || !(authentication.getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal)) {
+            return ResponseEntity.status(401).build();
         }
-        User user = repository.findByEmail(principal.getName()).orElseThrow();
+
+        com.empresa.comissao.security.AuthPrincipal principal = (com.empresa.comissao.security.AuthPrincipal) authentication
+                .getPrincipal();
+        Long userId = principal.getUserId();
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+
+        User user = repository.findById(userId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "Usuário não encontrado"));
+
+        // Validate Tenant Security (prevent leaking data from other tenants)
+        if (user.getEmpresa() != null && !user.getEmpresa().getId().equals(tenantId)) {
+            // Special case: Super Admin might be accessing from outside context, but for
+            // "me" it should match?
+            // Actually, if it's a multi-tenant system, "me" is the global user.
+            // But if the token is scoped to a tenant (tenantId != null), they should match.
+            if (tenantId != null && !user.getRole().equals(Role.SUPER_ADMIN)) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.FORBIDDEN,
+                        "Usuário pertence a outra empresa (Tenant mismatch)");
+            }
+        }
 
         java.util.Set<String> featureCodes = user.getFeatures().stream()
                 .map(com.empresa.comissao.domain.entity.Feature::getCodigo)

@@ -8,8 +8,13 @@ import java.time.LocalDate;
 
 @Data
 public class PecaServicoRequest {
-    @NotNull(message = "ID do Veículo é obrigatório")
+    // @NotNull(message = "ID do Veículo é obrigatório") -- Removido para suportar
+    // localId
     private Long veiculoId;
+
+    // Offline Sync
+    private String veiculoLocalId;
+    private String localId; // Para upsert da peça
 
     @NotNull(message = "ID do Tipo de Peça é obrigatório")
     private Long tipoPecaId;

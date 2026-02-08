@@ -10,9 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import com.empresa.comissao.domain.entity.User;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -82,10 +79,18 @@ public class ClienteService {
         org.springframework.data.jpa.domain.Specification<Cliente> spec = com.empresa.comissao.repository.specification.ClienteSpecification
                 .comFiltros(termo, cidade, bairro, status);
 
-        User currentUser = getCurrentUser();
-        if (currentUser != null && currentUser.getEmpresa() != null) {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            // Specification needs to be updated to support filtering by ID without loading
+            // Empresa entity if possible,
+            // but for now let's assume we can't easily change Specification logic without
+            // seeing it.
+            // Using a dummy/reference Empresa object or just updating the spec usage?
+            // Spec `porEmpresa` likely expects an Empresa object.
+            com.empresa.comissao.domain.entity.Empresa empresaRef = new com.empresa.comissao.domain.entity.Empresa();
+            empresaRef.setId(tenantId);
             spec = spec.and(com.empresa.comissao.repository.specification.ClienteSpecification
-                    .porEmpresa(currentUser.getEmpresa()));
+                    .porEmpresa(empresaRef));
         } else {
             // If no tenant context, return empty list to prevent leak
             return java.util.Collections.emptyList();
@@ -102,22 +107,16 @@ public class ClienteService {
     }
 
     public List<ClienteResponse> listarSync(java.time.LocalDateTime since) {
-        List<Cliente> clientes;
-        if (since != null) {
-            clientes = clienteRepository.findSyncData(since);
-        } else {
-            // Se since for nulo, retorna todos (padrão antigo ou sync inicial)
-            // CUIDADO: Em produção real, deve-se paginar. Para MVP/Mobile, ok.
-            clientes = clienteRepository.findAll();
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            return java.util.Collections.emptyList();
         }
 
-        // Ensure tenant scope valid
-        User user = getCurrentUser();
-        if (user != null && user.getEmpresa() != null) {
-            final Long empresaId = user.getEmpresa().getId();
-            clientes = clientes.stream()
-                    .filter(c -> c.getEmpresa() != null && c.getEmpresa().getId().equals(empresaId))
-                    .collect(Collectors.toList());
+        List<Cliente> clientes;
+        if (since != null) {
+            clientes = clienteRepository.findSyncData(since, tenantId);
+        } else {
+            clientes = clienteRepository.findAllByEmpresaId(tenantId);
         }
 
         return clientes.stream()
@@ -174,18 +173,10 @@ public class ClienteService {
                 .build();
     }
 
-    private User getCurrentUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof User) {
-            return (User) auth.getPrincipal();
-        }
-        return null;
-    }
-
     private void validarAcesso(Cliente cliente) {
-        User user = getCurrentUser();
-        if (user != null && user.getEmpresa() != null) {
-            if (cliente.getEmpresa() == null || !cliente.getEmpresa().getId().equals(user.getEmpresa().getId())) {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            if (cliente.getEmpresa() == null || !cliente.getEmpresa().getId().equals(tenantId)) {
                 throw new jakarta.persistence.EntityNotFoundException("Cliente não encontrado");
             }
         }

@@ -21,4 +21,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
             com.empresa.comissao.domain.enums.Role role);
 
     long countByEmpresaLicencaId(Long licencaId);
+
+    @org.springframework.data.jpa.repository.Query("""
+                SELECT new com.empresa.comissao.security.AuthVersionService$UserAuthSnapshot(
+                    u.id, u.authVersion, u.active
+                )
+                FROM User u
+                WHERE u.id = :userId
+            """)
+    java.util.Optional<com.empresa.comissao.security.AuthVersionService.UserAuthSnapshot> findAuthVersionById(
+            @org.springframework.data.repository.query.Param("userId") Long userId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Query("UPDATE User u SET u.authVersion = u.authVersion + 1 WHERE u.id = :userId")
+    void incrementAuthVersion(@org.springframework.data.repository.query.Param("userId") Long userId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT u.id FROM User u WHERE u.empresa.id = :empresaId")
+    java.util.List<Long> findUserIdsByEmpresaId(
+            @org.springframework.data.repository.query.Param("empresaId") Long empresaId);
 }

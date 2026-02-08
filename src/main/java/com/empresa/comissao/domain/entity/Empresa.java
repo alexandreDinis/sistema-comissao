@@ -82,6 +82,10 @@ public class Empresa {
     private com.empresa.comissao.domain.enums.StatusEmpresa status = com.empresa.comissao.domain.enums.StatusEmpresa.ATIVA;
 
     @Builder.Default
+    @Column(nullable = false)
+    private Integer tenantVersion = 0;
+
+    @Builder.Default
     private boolean ativo = true; // Mantido por compatibilidade, mas usar status preferencialmente
 
     @Column(name = "data_criacao", nullable = false, updatable = false)

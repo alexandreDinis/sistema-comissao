@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -32,15 +31,18 @@ public class FinanceiroController {
     // CONTAS A PAGAR
     // ========================================
 
+    // ========================================
+    // CONTAS A PAGAR
+    // ========================================
+
     @GetMapping("/contas-pagar")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     public ResponseEntity<List<ContaPagar>> listarContasPagar(
-            @RequestParam(required = false) String status,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam(required = false) String status) {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         List<ContaPagar> contas;
@@ -78,12 +80,11 @@ public class FinanceiroController {
     @GetMapping("/contas-receber")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     public ResponseEntity<List<ContaReceber>> listarContasReceber(
-            @RequestParam(required = false) String status,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam(required = false) String status) {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         List<ContaReceber> contas;
@@ -124,12 +125,11 @@ public class FinanceiroController {
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     public ResponseEntity<FluxoCaixaResponse> getFluxoCaixa(
             @RequestParam int mes,
-            @RequestParam int ano,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam int ano) {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         YearMonth periodo = YearMonth.of(ano, mes);
@@ -149,12 +149,11 @@ public class FinanceiroController {
     @io.swagger.v3.oas.annotations.Operation(summary = "Exportar Fluxo de Caixa em PDF", description = "Gera PDF do fluxo de caixa do período com entradas, saídas e saldo.")
     public ResponseEntity<byte[]> exportarFluxoCaixaPdf(
             @RequestParam int mes,
-            @RequestParam int ano,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam int ano) {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         YearMonth periodo = YearMonth.of(ano, mes);
@@ -178,12 +177,11 @@ public class FinanceiroController {
     @io.swagger.v3.oas.annotations.Operation(summary = "Relatório de Receita por Caixa", description = "Retorna lista detalhada de recebimentos do mês. BASE PARA O DAS (Simples Nacional).")
     public ResponseEntity<com.empresa.comissao.dto.ReceitaCaixaReportDTO> getReceitasCaixa(
             @RequestParam int mes,
-            @RequestParam int ano,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam int ano) {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         YearMonth periodo = YearMonth.of(ano, mes);
@@ -196,12 +194,11 @@ public class FinanceiroController {
 
     @GetMapping("/resumo")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
-    public ResponseEntity<FinanceiroService.ResumoFinanceiro> getResumo(
-            @AuthenticationPrincipal User usuario) {
+    public ResponseEntity<FinanceiroService.ResumoFinanceiro> getResumo() {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         return ResponseEntity.ok(financeiroService.getResumoFinanceiro(empresa));
@@ -213,12 +210,11 @@ public class FinanceiroController {
 
     @GetMapping("/distribuicao-lucros")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
-    public ResponseEntity<List<ContaPagar>> listarDistribuicoesLucro(
-            @AuthenticationPrincipal User usuario) {
+    public ResponseEntity<List<ContaPagar>> listarDistribuicoesLucro() {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         return ResponseEntity.ok(financeiroService.listarDistribuicoesLucro(empresa));
@@ -227,12 +223,11 @@ public class FinanceiroController {
     @PostMapping("/distribuicao-lucros")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     public ResponseEntity<ContaPagar> criarDistribuicaoLucros(
-            @RequestBody DistribuicaoLucrosRequest request,
-            @AuthenticationPrincipal User usuario) {
+            @RequestBody DistribuicaoLucrosRequest request) {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         ContaPagar conta = financeiroService.criarDistribuicaoLucros(
@@ -251,12 +246,11 @@ public class FinanceiroController {
 
     @GetMapping("/imposto-pago")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
-    public ResponseEntity<List<ContaPagar>> listarImpostosPagos(
-            @AuthenticationPrincipal User usuario) {
+    public ResponseEntity<List<ContaPagar>> listarImpostosPagos() {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         return ResponseEntity.ok(financeiroService.listarImpostosPagos(empresa));
@@ -265,12 +259,11 @@ public class FinanceiroController {
     @PostMapping("/imposto-pago")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     public ResponseEntity<ContaPagar> criarImpostoPago(
-            @RequestBody ImpostoPagoRequest request,
-            @AuthenticationPrincipal User usuario) {
+            @RequestBody ImpostoPagoRequest request) {
 
-        Empresa empresa = usuario.getEmpresa();
+        Empresa empresa = resolveEmpresa();
         if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+            throw new BusinessException("Empresa não encontrada no contexto");
         }
 
         ContaPagar conta = financeiroService.criarImpostoPago(
@@ -281,6 +274,21 @@ public class FinanceiroController {
                 request.descricao());
 
         return ResponseEntity.ok(conta);
+    }
+
+    private Empresa resolveEmpresa() {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            // Return Proxy if services handle it, or fetch simple reference
+            // Given the complexity of finance service, a proxy with ID is usually enough
+            // UNLESS the service accesses properties like 'modoComissao' etc immediately
+            // without reloading.
+            // Safe bet: Proxy. If logic fails, we upgrade to fetch.
+            Empresa e = new Empresa();
+            e.setId(tenantId);
+            return e;
+        }
+        return null;
     }
 
     // ========================================

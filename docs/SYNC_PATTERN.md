@@ -24,3 +24,24 @@ Sincronizar mudanças (delta) entre servidor e mobile sem perder dados.
 - Faturamento
 - ContaReceber
 - Despesas
+
+## Checagem Leve (3G Friendly)
+
+### Endpoint `/api/v1/sync/status`
+Retorna os timestamps máximos de alteração por recurso, permitindo que o mobile saiba se há atualizações sem baixar dados.
+
+**Request:** `GET /api/v1/sync/status` (Header: Authorization Bearer ...)
+
+**Response:**
+```json
+{
+  "serverTime": "2026-02-08T14:00:00Z",
+  "clientesUpdatedAtMax": "2026-02-08T13:40:00Z",
+  "osUpdatedAtMax": "2026-02-08T12:10:00Z"
+}
+```
+
+### Fluxo Mobile
+1.  **Check:** App chama `/sync/status`.
+2.  **Compare:** Se `clientesUpdatedAtMax > last_synced_at_client`, exibe badge "Atualizações disponíveis".
+3.  **Action:** Usuário clica em sincronizar -> App faz o sync incremental normal.

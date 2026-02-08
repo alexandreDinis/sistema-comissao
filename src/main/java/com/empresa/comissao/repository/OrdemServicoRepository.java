@@ -38,14 +38,13 @@ public interface OrdemServicoRepository extends JpaRepository<OrdemServico, Long
                         "FROM OrdemServico os JOIN os.cliente c " +
                         "WHERE os.empresa.id = :empresaId " +
                         "AND os.status = 'FINALIZADA' " +
-                        "AND YEAR(os.data) = :ano " +
-                        "AND (:mes IS NULL OR MONTH(os.data) = :mes) " +
+                        "AND os.data BETWEEN :start AND :end " +
                         "GROUP BY c.id, c.nomeFantasia, c.razaoSocial " +
                         "ORDER BY SUM(os.valorTotal) DESC")
         List<com.empresa.comissao.dto.response.RankingClienteDTO> findRankingClientes(
                         @org.springframework.data.repository.query.Param("empresaId") Long empresaId,
-                        @org.springframework.data.repository.query.Param("ano") int ano,
-                        @org.springframework.data.repository.query.Param("mes") Integer mes);
+                        @org.springframework.data.repository.query.Param("start") java.time.LocalDate start,
+                        @org.springframework.data.repository.query.Param("end") java.time.LocalDate end);
 
         @org.springframework.data.jpa.repository.Query("SELECT DISTINCT os FROM OrdemServico os LEFT JOIN FETCH os.cliente LEFT JOIN FETCH os.veiculos v LEFT JOIN FETCH v.pecas p WHERE os.updatedAt > :since AND os.empresa.id = :empresaId")
         List<OrdemServico> findSyncData(
@@ -56,4 +55,25 @@ public interface OrdemServicoRepository extends JpaRepository<OrdemServico, Long
         List<OrdemServico> findAllFullSync(
                         @org.springframework.data.repository.query.Param("empresaId") Long empresaId);
 
+        @org.springframework.data.jpa.repository.Query("SELECT DISTINCT os FROM OrdemServico os LEFT JOIN FETCH os.cliente LEFT JOIN FETCH os.veiculos v LEFT JOIN FETCH v.pecas p WHERE os.updatedAt > :since AND os.empresa.id = :empresaId AND os.usuario.id = :usuarioId")
+        List<OrdemServico> findSyncDataByUsuario(
+                        @org.springframework.data.repository.query.Param("empresaId") Long empresaId,
+                        @org.springframework.data.repository.query.Param("since") java.time.LocalDateTime since,
+                        @org.springframework.data.repository.query.Param("usuarioId") Long usuarioId);
+
+        @org.springframework.data.jpa.repository.Query("SELECT DISTINCT os FROM OrdemServico os LEFT JOIN FETCH os.cliente LEFT JOIN FETCH os.veiculos v LEFT JOIN FETCH v.pecas p WHERE os.empresa.id = :empresaId AND os.usuario.id = :usuarioId")
+        List<OrdemServico> findAllFullSyncByUsuario(
+                        @org.springframework.data.repository.query.Param("empresaId") Long empresaId,
+                        @org.springframework.data.repository.query.Param("usuarioId") Long usuarioId);
+
+        @org.springframework.data.jpa.repository.Query("SELECT MAX(os.updatedAt) FROM OrdemServico os WHERE os.empresa = :empresa")
+        java.time.LocalDateTime findMaxUpdatedAtByEmpresa(
+                        @org.springframework.data.repository.query.Param("empresa") com.empresa.comissao.domain.entity.Empresa empresa);
+
+        @org.springframework.data.jpa.repository.Query("SELECT MAX(os.updatedAt) FROM OrdemServico os WHERE os.empresa.id = :empresaId")
+        java.time.LocalDateTime findMaxUpdatedAtByEmpresaId(
+                        @org.springframework.data.repository.query.Param("empresaId") Long empresaId);
+
+        java.util.Optional<OrdemServico> findByLocalIdAndEmpresa(String localId,
+                        com.empresa.comissao.domain.entity.Empresa empresa);
 }

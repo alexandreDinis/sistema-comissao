@@ -1,61 +1,49 @@
 package com.empresa.comissao.config;
 
-import com.empresa.comissao.domain.entity.Empresa;
-import com.empresa.comissao.domain.entity.Licenca;
 import com.empresa.comissao.domain.enums.StatusEmpresa;
 import com.empresa.comissao.domain.enums.StatusLicenca;
-import com.empresa.comissao.repository.EmpresaRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import java.util.Optional;
-
 @Component
 @RequiredArgsConstructor
 public class TenantAccessInterceptor implements HandlerInterceptor {
 
-    private final EmpresaRepository empresaRepository;
+    private final com.empresa.comissao.security.AuthVersionService authVersionService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
 
-        // Ignorar endpoints públicos (login, webhooks, paginas de erro)
+        // Ignorar endpoints públicos (login, webhooks, paginas de erro) e Swagger
         String path = request.getRequestURI();
-        if (path.startsWith("/api/v1/webhooks") || path.startsWith("/api/v1/auth")) {
+        if (path.startsWith("/api/v1/auth") ||
+                path.startsWith("/api/v1/webhooks") ||
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/v3/api-docs")) {
             return true;
         }
 
         Long tenantId = TenantContext.getCurrentTenant();
 
         if (tenantId != null) {
-            Optional<Empresa> empresaOpt = empresaRepository.findById(tenantId);
+            // ✅ USAR CACHE: 0 DB Hits se estiver quente
+            var snapshot = authVersionService.getTenantAccessVersion(tenantId);
 
-            if (empresaOpt.isPresent()) {
-                Empresa empresa = empresaOpt.get();
-
+            if (snapshot != null) {
                 // 1. Verificar se Tenant está bloqueado
-                if (empresa.getStatus() == StatusEmpresa.BLOQUEADA) {
+                if (snapshot.getStatus() == StatusEmpresa.BLOQUEADA) {
                     bloquearAcesso(response, "Acesso bloqueado por inadimplência da empresa.");
                     return false;
                 }
 
                 // 2. Verificar se Licenca (Revendedor) está suspensa
-                // Note: Empresa entity must have getLicenca() loaded or we fetch ID
-                if (empresa.getLicenca() != null) {
-                    Licenca licenca = empresa.getLicenca(); // Hibernate Proxy check might be needed if lazy
-                    // Melhor buscar status da licença simples
-
-                    // Se estiver lazy carregado, talvez falhe se session fechada?
-                    // Mas repository.findById deve trazer.
-
-                    if (licenca.getStatus() == StatusLicenca.SUSPENSA) {
-                        bloquearAcesso(response, "Acesso suspenso pelo administrador do sistema.");
-                        return false;
-                    }
+                if (snapshot.getLicencaStatus() == StatusLicenca.SUSPENSA) {
+                    bloquearAcesso(response, "Acesso suspenso pelo administrador do sistema.");
+                    return false;
                 }
             }
         }

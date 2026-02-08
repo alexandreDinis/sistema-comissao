@@ -2,7 +2,6 @@ package com.empresa.comissao.controller;
 
 import com.empresa.comissao.domain.entity.CartaoCredito;
 import com.empresa.comissao.domain.entity.Empresa;
-import com.empresa.comissao.domain.entity.User;
 import com.empresa.comissao.exception.BusinessException;
 import com.empresa.comissao.repository.CartaoCreditoRepository;
 import com.empresa.comissao.service.FaturaService;
@@ -13,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -32,11 +30,14 @@ public class CartaoController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     @Operation(summary = "Listar cartões", description = "Lista todos os cartões de crédito da empresa")
-    public ResponseEntity<List<CartaoCredito>> listar(@AuthenticationPrincipal User usuario) {
-        Empresa empresa = usuario.getEmpresa();
-        if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+    public ResponseEntity<List<CartaoCredito>> listar() {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            throw new BusinessException("Tenant ID não encontrado");
         }
+        Empresa empresa = new Empresa();
+        empresa.setId(tenantId);
+
         return ResponseEntity.ok(cartaoRepository.findByEmpresaAndAtivoTrueOrderByNomeAsc(empresa));
     }
 
@@ -44,13 +45,14 @@ public class CartaoController {
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Criar cartão", description = "Cadastra um novo cartão de crédito corporativo")
     public ResponseEntity<CartaoCredito> criar(
-            @Valid @RequestBody CartaoCreditoRequest request,
-            @AuthenticationPrincipal User usuario) {
+            @Valid @RequestBody CartaoCreditoRequest request) {
 
-        Empresa empresa = usuario.getEmpresa();
-        if (empresa == null) {
-            throw new BusinessException("Usuário não está vinculado a uma empresa");
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            throw new BusinessException("Tenant ID não encontrado");
         }
+        Empresa empresa = new Empresa();
+        empresa.setId(tenantId);
 
         CartaoCredito cartao = CartaoCredito.builder()
                 .nome(request.nome())
@@ -62,8 +64,8 @@ public class CartaoController {
                 .build();
 
         CartaoCredito salvo = cartaoRepository.save(cartao);
-        log.info("Cartao criado: {} (vencimento dia {}, limite: R$ {})",
-                salvo.getNome(), salvo.getDiaVencimento(), salvo.getLimite());
+        log.info("Cartao criado: {} (vencimento dia {}, limite: R$ {}) - Tenant: {}",
+                salvo.getNome(), salvo.getDiaVencimento(), salvo.getLimite(), tenantId);
         return ResponseEntity.ok(salvo);
     }
 
@@ -72,13 +74,17 @@ public class CartaoController {
     @Operation(summary = "Editar cartão", description = "Edita um cartão de crédito existente")
     public ResponseEntity<CartaoCredito> editar(
             @PathVariable Long id,
-            @Valid @RequestBody CartaoCreditoRequest request,
-            @AuthenticationPrincipal User usuario) {
+            @Valid @RequestBody CartaoCreditoRequest request) {
+
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            throw new BusinessException("Tenant ID não encontrado");
+        }
 
         CartaoCredito cartao = cartaoRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Cartão não encontrado"));
 
-        if (!cartao.getEmpresa().getId().equals(usuario.getEmpresa().getId())) {
+        if (!cartao.getEmpresa().getId().equals(tenantId)) {
             throw new BusinessException("Cartão não pertence à sua empresa");
         }
 
@@ -101,13 +107,17 @@ public class CartaoController {
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     @Operation(summary = "Consultar limite disponível", description = "Retorna o limite disponível do cartão")
     public ResponseEntity<LimiteDisponivelDTO> getLimiteDisponivel(
-            @PathVariable Long id,
-            @AuthenticationPrincipal User usuario) {
+            @PathVariable Long id) {
+
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            throw new BusinessException("Tenant ID não encontrado");
+        }
 
         CartaoCredito cartao = cartaoRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Cartão não encontrado"));
 
-        if (!cartao.getEmpresa().getId().equals(usuario.getEmpresa().getId())) {
+        if (!cartao.getEmpresa().getId().equals(tenantId)) {
             throw new BusinessException("Cartão não pertence à sua empresa");
         }
 
@@ -128,11 +138,17 @@ public class CartaoController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Desativar cartão", description = "Desativa um cartão de crédito (soft delete)")
-    public ResponseEntity<Void> desativar(@PathVariable Long id, @AuthenticationPrincipal User usuario) {
+    public ResponseEntity<Void> desativar(@PathVariable Long id) {
+
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            throw new BusinessException("Tenant ID não encontrado");
+        }
+
         CartaoCredito cartao = cartaoRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Cartão não encontrado"));
 
-        if (!cartao.getEmpresa().getId().equals(usuario.getEmpresa().getId())) {
+        if (!cartao.getEmpresa().getId().equals(tenantId)) {
             throw new BusinessException("Cartão não pertence à sua empresa");
         }
 
