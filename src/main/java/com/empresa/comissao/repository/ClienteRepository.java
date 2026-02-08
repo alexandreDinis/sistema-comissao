@@ -31,4 +31,9 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long>,
         @org.springframework.data.jpa.repository.Query("SELECT MAX(c.updatedAt) FROM Cliente c WHERE c.empresa.id = :empresaId")
         java.time.LocalDateTime findMaxUpdatedAtByEmpresaId(
                         @org.springframework.data.repository.query.Param("empresaId") Long empresaId);
+
+        // Soft Delete: Buscar por empresa e não deletado
+        @org.springframework.data.jpa.repository.Query("SELECT c FROM Cliente c WHERE c.empresa.id = :empresaId AND c.deletedAt IS NULL")
+        java.util.List<Cliente> findByEmpresaIdAndDeletedAtIsNull(
+                        @org.springframework.data.repository.query.Param("empresaId") Long empresaId);
 }

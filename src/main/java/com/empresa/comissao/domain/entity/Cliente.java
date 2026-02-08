@@ -10,7 +10,8 @@ import lombok.Builder;
 @Entity
 @Table(name = "clientes", uniqueConstraints = {
         @UniqueConstraint(columnNames = { "cnpj", "empresa_id" }),
-        @UniqueConstraint(columnNames = { "cpf", "empresa_id" })
+        @UniqueConstraint(columnNames = { "cpf", "empresa_id" }),
+        @UniqueConstraint(columnNames = { "empresa_id", "local_id" })
 })
 @Data
 @NoArgsConstructor
@@ -59,7 +60,7 @@ public class Cliente {
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa;
 
-    @Column(name = "local_id", nullable = false, unique = true)
+    @Column(name = "local_id", nullable = false)
     private String localId;
 
     @Column(name = "deleted_at")

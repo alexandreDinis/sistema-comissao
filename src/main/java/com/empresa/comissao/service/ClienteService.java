@@ -64,7 +64,15 @@ public class ClienteService {
 
         validarAcesso(cliente);
 
-        clienteRepository.delete(cliente);
+        if (cliente.getDeletedAt() != null) {
+            return; // Idempotent
+        }
+
+        cliente.setDeletedAt(java.time.LocalDateTime.now());
+        cliente.setUpdatedAt(java.time.LocalDateTime.now());
+        cliente.setStatus(com.empresa.comissao.domain.enums.StatusCliente.INATIVO);
+
+        clienteRepository.save(cliente);
     }
 
     public ClienteResponse buscarPorId(Long id) {
@@ -81,18 +89,11 @@ public class ClienteService {
 
         Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
         if (tenantId != null) {
-            // Specification needs to be updated to support filtering by ID without loading
-            // Empresa entity if possible,
-            // but for now let's assume we can't easily change Specification logic without
-            // seeing it.
-            // Using a dummy/reference Empresa object or just updating the spec usage?
-            // Spec `porEmpresa` likely expects an Empresa object.
             com.empresa.comissao.domain.entity.Empresa empresaRef = new com.empresa.comissao.domain.entity.Empresa();
             empresaRef.setId(tenantId);
             spec = spec.and(com.empresa.comissao.repository.specification.ClienteSpecification
                     .porEmpresa(empresaRef));
         } else {
-            // If no tenant context, return empty list to prevent leak
             return java.util.Collections.emptyList();
         }
 
@@ -103,7 +104,14 @@ public class ClienteService {
 
     // Deprecated or redirect
     public List<ClienteResponse> listarTodos() {
-        return listar(null, null, null, null);
+        // Listar sem filtros, apenas não deletados do tenant
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null)
+            return java.util.Collections.emptyList();
+
+        return clienteRepository.findByEmpresaIdAndDeletedAtIsNull(tenantId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
     }
 
     public List<ClienteResponse> listarSync(java.time.LocalDateTime since) {
@@ -114,9 +122,12 @@ public class ClienteService {
 
         List<Cliente> clientes;
         if (since != null) {
+            // Sync traz tudo que mudou, inclusive deletados (para o app remover via
+            // localId/ID)
             clientes = clienteRepository.findSyncData(since, tenantId);
         } else {
-            clientes = clienteRepository.findAllByEmpresaId(tenantId);
+            // Full Sync inicial: não traz deletados
+            clientes = clienteRepository.findByEmpresaIdAndDeletedAtIsNull(tenantId);
         }
 
         return clientes.stream()
@@ -168,8 +179,12 @@ public class ClienteService {
                 .estado(c.getEstado())
                 .cep(c.getCep())
                 .localId(c.getLocalId())
-                .deletedAt(c.getDeletedAt())
-                .updatedAt(c.getUpdatedAt())
+                .deletedAt(
+                        c.getDeletedAt() != null ? c.getDeletedAt().atZone(java.time.ZoneId.systemDefault()).toInstant()
+                                : null)
+                .updatedAt(
+                        c.getUpdatedAt() != null ? c.getUpdatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant()
+                                : null)
                 .build();
     }
 
