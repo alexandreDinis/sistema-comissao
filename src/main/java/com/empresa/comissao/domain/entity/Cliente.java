@@ -65,7 +65,6 @@ public class Cliente {
     @Column(name = "deleted_at")
     private java.time.LocalDateTime deletedAt;
 
-    @org.hibernate.annotations.UpdateTimestamp
     @Column(name = "updated_at")
     private java.time.LocalDateTime updatedAt;
 
@@ -74,5 +73,11 @@ public class Cliente {
         if (this.localId == null) {
             this.localId = java.util.UUID.randomUUID().toString();
         }
+        this.updatedAt = java.time.LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = java.time.LocalDateTime.now();
     }
 }

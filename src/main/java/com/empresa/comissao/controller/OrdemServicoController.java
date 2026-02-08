@@ -58,8 +58,30 @@ public class OrdemServicoController {
     @GetMapping
     @Operation(summary = "Listar todas as OS", description = "Suporte a Delta Sync (?since=ISO8601)")
     public ResponseEntity<java.util.List<OrdemServicoResponse>> listarTodas(
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime since) {
-        return ResponseEntity.ok(osService.listarSync(since));
+            @RequestParam(required = false) java.time.Instant since) {
+
+        java.util.List<OrdemServicoResponse> result;
+        long start = System.currentTimeMillis();
+
+        if (since != null) {
+            org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OrdemServicoController.class);
+            log.info("[OS] since(raw)={}", since);
+
+            // Standardized conversion (UTC -> Local + Skew)
+            java.time.LocalDateTime sinceLocal = com.empresa.comissao.util.SyncUtils.normalizeSince(since);
+
+            log.info("[OS] sinceLocal(afterSkew)={}", sinceLocal);
+
+            result = osService.listarSync(sinceLocal);
+        } else {
+            result = osService.listarSync(null);
+        }
+
+        long duration = System.currentTimeMillis() - start;
+        org.slf4j.LoggerFactory.getLogger(OrdemServicoController.class)
+                .info("[SYNC_METRIC] resource={}, items={}, duration={}ms", "ordens-servico", result.size(), duration);
+
+        return ResponseEntity.ok(result);
     }
 
     @PatchMapping("/{id}/status")

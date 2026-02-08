@@ -35,10 +35,24 @@ public class ClienteController {
             @RequestParam(required = false) String cidade,
             @RequestParam(required = false) String bairro,
             @RequestParam(required = false) com.empresa.comissao.domain.enums.StatusCliente status,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime since) {
+            @RequestParam(required = false) java.time.Instant since) {
 
         if (since != null) {
-            return ResponseEntity.ok(clienteService.listarSync(since));
+            org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ClienteController.class);
+            log.info("[CLIENTES] since(raw)={}", since);
+
+            // Standardized conversion (UTC -> Local + Skew)
+            java.time.LocalDateTime sinceLocal = com.empresa.comissao.util.SyncUtils.normalizeSince(since);
+
+            log.info("[CLIENTES] sinceLocal(afterSkew)={}", sinceLocal);
+
+            long start = System.currentTimeMillis();
+            List<ClienteResponse> result = clienteService.listarSync(sinceLocal);
+            long duration = System.currentTimeMillis() - start;
+
+            log.info("[SYNC_METRIC] resource={}, items={}, duration={}ms", "clientes", result.size(), duration);
+
+            return ResponseEntity.ok(result);
         }
 
         return ResponseEntity.ok(clienteService.listar(termo, cidade, bairro, status));

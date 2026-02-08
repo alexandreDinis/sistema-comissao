@@ -10,4 +10,13 @@ public class SistemaComissaoApplication {
 		SpringApplication.run(SistemaComissaoApplication.class, args);
 	}
 
+	@jakarta.annotation.PostConstruct
+	public void init() {
+		java.util.TimeZone tz = java.util.TimeZone.getDefault();
+		org.slf4j.LoggerFactory.getLogger(SistemaComissaoApplication.class)
+				.info("🌍 JVM TimeZone: {} ({}) | Offset: {}",
+						tz.getID(),
+						tz.getDisplayName(),
+						java.time.ZoneId.systemDefault().getRules().getOffset(java.time.Instant.now()));
+	}
 }
