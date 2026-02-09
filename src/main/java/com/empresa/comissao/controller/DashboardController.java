@@ -28,7 +28,15 @@ public class DashboardController {
     @GetMapping("/stats")
     @Operation(summary = "Get Dashboard Stats", description = "Returns active OSs, finalized OSs (month), distinct vehicles (month), and total parts (month).")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA', 'USER')")
-    public ResponseEntity<DashboardStatsResponse> getStats(@AuthenticationPrincipal User usuario) {
+    public ResponseEntity<DashboardStatsResponse> getStats(
+            @AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal principal) {
+        User usuario = new User();
+        usuario.setId(principal.getUserId());
+        usuario.setEmail(principal.getEmail());
+        Empresa empresa = new Empresa();
+        empresa.setId(principal.getTenantId());
+        usuario.setEmpresa(empresa);
+
         return ResponseEntity.ok(dashboardService.getStats(usuario));
     }
 
@@ -36,7 +44,15 @@ public class DashboardController {
     @Operation(summary = "Get Dashboard Overview", description = "Returns consolidated dashboard data (stats + YoY) in a single request.")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA', 'USER')")
     public ResponseEntity<com.empresa.comissao.dto.response.DashboardOverviewDTO> getOverview(
-            @AuthenticationPrincipal User usuario) {
+            @AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal principal) {
+
+        User usuario = new User();
+        usuario.setId(principal.getUserId());
+        usuario.setEmail(principal.getEmail());
+        Empresa empresa = new Empresa();
+        empresa.setId(principal.getTenantId());
+        usuario.setEmpresa(empresa);
+
         return ResponseEntity.ok(dashboardService.getOverview(usuario));
     }
 

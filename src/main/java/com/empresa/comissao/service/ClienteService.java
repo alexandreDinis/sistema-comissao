@@ -18,20 +18,12 @@ public class ClienteService {
     private final ClienteRepository clienteRepository;
 
     @Transactional
-    public ClienteResponse criar(ClienteRequest request, com.empresa.comissao.domain.entity.User usuario) {
-        com.empresa.comissao.domain.enums.TipoPessoa tipo = request.getTipoPessoa() != null
-                ? request.getTipoPessoa()
-                : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
-
-        if (tipo == com.empresa.comissao.domain.enums.TipoPessoa.FISICA) {
-            com.empresa.comissao.validation.ValidadorDocumento.validarCpf(request.getCpf());
-        } else {
-            com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
-        }
+    public ClienteResponse criar(ClienteRequest request) {
+        validarDocumentos(request);
 
         Cliente cliente = new Cliente();
         updateEntity(cliente, request);
-        cliente.setEmpresa(usuario.getEmpresa());
+        cliente.setEmpresa(getEmpresaAutenticada());
         cliente = clienteRepository.save(cliente);
         return mapToResponse(cliente);
     }
@@ -42,16 +34,7 @@ public class ClienteService {
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Cliente não encontrado"));
 
         validarAcesso(cliente);
-
-        com.empresa.comissao.domain.enums.TipoPessoa tipo = request.getTipoPessoa() != null
-                ? request.getTipoPessoa()
-                : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
-
-        if (tipo == com.empresa.comissao.domain.enums.TipoPessoa.FISICA) {
-            com.empresa.comissao.validation.ValidadorDocumento.validarCpf(request.getCpf());
-        } else {
-            com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
-        }
+        validarDocumentos(request);
 
         updateEntity(cliente, request);
         cliente = clienteRepository.save(cliente);
@@ -186,6 +169,31 @@ public class ClienteService {
                         c.getUpdatedAt() != null ? c.getUpdatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant()
                                 : null)
                 .build();
+    }
+
+    private void validarDocumentos(ClienteRequest request) {
+        com.empresa.comissao.domain.enums.TipoPessoa tipo = request.getTipoPessoa() != null
+                ? request.getTipoPessoa()
+                : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
+
+        if (tipo == com.empresa.comissao.domain.enums.TipoPessoa.FISICA) {
+            if (request.getCpf() != null && !request.getCpf().isBlank()) {
+                com.empresa.comissao.validation.ValidadorDocumento.validarCpf(request.getCpf());
+            }
+        } else {
+            if (request.getCnpj() != null && !request.getCnpj().isBlank()) {
+                com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
+            }
+        }
+    }
+
+    private com.empresa.comissao.domain.entity.Empresa getEmpresaAutenticada() {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            return com.empresa.comissao.domain.entity.Empresa.builder().id(tenantId).build();
+        }
+        throw new jakarta.persistence.EntityNotFoundException(
+                "Usuário não vinculado a uma empresa (TenantContext vazio)");
     }
 
     private void validarAcesso(Cliente cliente) {
