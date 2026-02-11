@@ -20,7 +20,7 @@ public class DashboardService {
         private final com.empresa.comissao.repository.ContaReceberRepository contaReceberRepository;
 
         public com.empresa.comissao.dto.response.DashboardOverviewDTO getOverview(
-                        com.empresa.comissao.domain.entity.User usuario) {
+                        com.empresa.comissao.domain.entity.User usuario, boolean isAdmin) {
                 // 1. Resolve Company/Tenant
                 com.empresa.comissao.domain.entity.Empresa empresa = resolveEmpresa(usuario);
 
@@ -29,12 +29,20 @@ public class DashboardService {
                 }
 
                 // 2. Get Stats (reuse internal logic with resolved empresa)
-                DashboardStatsResponse stats = getStatsInternal(empresa);
+                DashboardStatsResponse stats;
+                if (isAdmin) {
+                        stats = getStatsGlobal(empresa);
+                } else {
+                        stats = getStatsPersonal(empresa, usuario);
+                }
 
                 // 3. Get YoY (Current Year/Month)
                 LocalDate now = LocalDate.now();
                 com.empresa.comissao.dto.ComparacaoFaturamentoDTO yoy = null;
                 try {
+                        // YoY permissions should also be checked? For now keep as is, but if employee
+                        // sees global yoy it might be inconsistent.
+                        // Assuming YoY follows stats logic:
                         yoy = comissaoService.obterComparacaoYoY(now.getYear(), now.getMonthValue(), usuario, empresa);
                 } catch (Exception e) {
                         // Log error but don't fail the whole dashboard
@@ -42,18 +50,21 @@ public class DashboardService {
                 }
 
                 // 4. Get Top 10 Pending Lists (Optimized)
+                // Only for admins
                 java.util.List<com.empresa.comissao.dto.list.ContaResumoDTO> contasPagar = java.util.Collections
                                 .emptyList();
                 java.util.List<com.empresa.comissao.dto.list.ContaResumoDTO> contasReceber = java.util.Collections
                                 .emptyList();
 
-                try {
-                        org.springframework.data.domain.Pageable topTen = org.springframework.data.domain.PageRequest
-                                        .of(0, 10);
-                        contasPagar = contaPagarRepository.findTop10VencendoProximos(empresa, topTen);
-                        contasReceber = contaReceberRepository.findTop10VencendoProximos(empresa, topTen);
-                } catch (Exception e) {
-                        System.err.println("Error fetching dashboard lists: " + e.getMessage());
+                if (isAdmin) {
+                        try {
+                                org.springframework.data.domain.Pageable topTen = org.springframework.data.domain.PageRequest
+                                                .of(0, 10);
+                                contasPagar = contaPagarRepository.findTop10VencendoProximos(empresa, topTen);
+                                contasReceber = contaReceberRepository.findTop10VencendoProximos(empresa, topTen);
+                        } catch (Exception e) {
+                                System.err.println("Error fetching dashboard lists: " + e.getMessage());
+                        }
                 }
 
                 return com.empresa.comissao.dto.response.DashboardOverviewDTO.builder()
@@ -64,15 +75,21 @@ public class DashboardService {
                                 .build();
         }
 
-        public DashboardStatsResponse getStats(com.empresa.comissao.domain.entity.User usuario) {
+        public DashboardStatsResponse getStats(com.empresa.comissao.domain.entity.User usuario, boolean isAdmin) {
                 com.empresa.comissao.domain.entity.Empresa empresa = resolveEmpresa(usuario);
                 if (empresa == null) {
                         return DashboardStatsResponse.builder().build();
                 }
-                return getStatsInternal(empresa);
+
+                // Logic Split: Admin vs User
+                if (isAdmin) {
+                        return getStatsGlobal(empresa);
+                } else {
+                        return getStatsPersonal(empresa, usuario);
+                }
         }
 
-        private DashboardStatsResponse getStatsInternal(com.empresa.comissao.domain.entity.Empresa empresa) {
+        private DashboardStatsResponse getStatsGlobal(com.empresa.comissao.domain.entity.Empresa empresa) {
                 LocalDate now = LocalDate.now();
                 LocalDate startOfMonth = YearMonth.from(now).atDay(1);
                 LocalDate endOfMonth = YearMonth.from(now).atEndOfMonth();
@@ -101,17 +118,57 @@ public class DashboardService {
                 long contasPagarVencendo = contaPagarRepository.countVencendoProximos(empresa, today, plus7Days);
                 long recebimentosVencendo = contaReceberRepository.countVencendoProximos(empresa, today, plus7Days);
 
+                return buildResponse(activeOsCount, finalizedMonthCount, veiculosMonthCount, pecasMonthCount,
+                                totalAPagarPendente, totalAReceberPendente, contasPagarVencendo, recebimentosVencendo);
+        }
+
+        private DashboardStatsResponse getStatsPersonal(com.empresa.comissao.domain.entity.Empresa empresa,
+                        com.empresa.comissao.domain.entity.User usuario) {
+                LocalDate now = LocalDate.now();
+                LocalDate startOfMonth = YearMonth.from(now).atDay(1);
+                LocalDate endOfMonth = YearMonth.from(now).atEndOfMonth();
+
+                long activeOsCount = osRepository
+                                .countByStatusInAndEmpresaAndUsuario(
+                                                List.of(StatusOrdemServico.ABERTA, StatusOrdemServico.EM_EXECUCAO),
+                                                empresa, usuario);
+
+                long finalizedMonthCount = osRepository.countByStatusAndDataBetweenAndEmpresaAndUsuario(
+                                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth, empresa, usuario);
+
+                long veiculosMonthCount = osRepository.countVeiculosByStatusAndDataAndEmpresaAndUsuario(
+                                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth, empresa, usuario);
+
+                long pecasMonthCount = osRepository.countPecasByStatusAndDataAndEmpresaAndUsuario(
+                                StatusOrdemServico.FINALIZADA, startOfMonth, endOfMonth, empresa, usuario);
+
+                // Financials: Employees usually don't see full financials, but if they strictly
+                // need to see 0 or filtered:
+                // The requirement says "admin sees total". It implies employees see their own.
+                // But Financials (Bills to Pay/Receive) are usually Company-level.
+                // Strategy: Show 0 for personal view unless they have specific permission
+                // (which we don't have granularity for yet).
+                // Or, keep Global Financials but filtered OS stats?
+                // Usually valid feedback: "Dashboard vehicle count".
+                // Let's hide company financials for non-admins to be safe/consistent with
+                // "Personal View".
+
+                return buildResponse(activeOsCount, finalizedMonthCount, veiculosMonthCount, pecasMonthCount,
+                                java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO, 0, 0);
+        }
+
+        private DashboardStatsResponse buildResponse(long activeOs, long finalized, long veiculos, long pecas,
+                        java.math.BigDecimal pagar, java.math.BigDecimal receber,
+                        long pagarVencendo, long receberVencendo) {
                 return DashboardStatsResponse.builder()
-                                .activeOsCount(activeOsCount)
-                                .finalizedMonthCount(finalizedMonthCount)
-                                .veiculosMonthCount(veiculosMonthCount)
-                                .pecasMonthCount(pecasMonthCount)
-                                .totalAPagarPendente(totalAPagarPendente != null ? totalAPagarPendente
-                                                : java.math.BigDecimal.ZERO)
-                                .totalAReceberPendente(totalAReceberPendente != null ? totalAReceberPendente
-                                                : java.math.BigDecimal.ZERO)
-                                .contasPagarVencendoProximos7Dias(contasPagarVencendo)
-                                .recebimentosVencendoProximos7Dias(recebimentosVencendo)
+                                .activeOsCount(activeOs)
+                                .finalizedMonthCount(finalized)
+                                .veiculosMonthCount(veiculos)
+                                .pecasMonthCount(pecas)
+                                .totalAPagarPendente(pagar != null ? pagar : java.math.BigDecimal.ZERO)
+                                .totalAReceberPendente(receber != null ? receber : java.math.BigDecimal.ZERO)
+                                .contasPagarVencendoProximos7Dias(pagarVencendo)
+                                .recebimentosVencendoProximos7Dias(receberVencendo)
                                 .build();
         }
 

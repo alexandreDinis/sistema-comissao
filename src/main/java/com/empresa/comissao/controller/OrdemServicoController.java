@@ -101,6 +101,20 @@ public class OrdemServicoController {
         return ResponseEntity.ok(osService.atualizarOS(id, request));
     }
 
+    @PatchMapping("/veiculos/{id}")
+    @Operation(summary = "Atualizar veículo")
+    public ResponseEntity<OrdemServicoResponse> atualizarVeiculo(@PathVariable Long id,
+            @RequestBody VeiculoRequest request) {
+        return ResponseEntity.ok(osService.atualizarVeiculo(id, request));
+    }
+
+    @PatchMapping("/pecas/{id}")
+    @Operation(summary = "Atualizar peça/serviço")
+    public ResponseEntity<OrdemServicoResponse> atualizarPeca(@PathVariable Long id,
+            @RequestBody PecaServicoRequest request) {
+        return ResponseEntity.ok(osService.atualizarPeca(id, request));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Cancelar OS")
     public ResponseEntity<Void> cancelar(@PathVariable Long id) {

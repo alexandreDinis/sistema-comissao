@@ -121,8 +121,8 @@ public class ClienteService {
     private void updateEntity(Cliente c, ClienteRequest r) {
         c.setRazaoSocial(r.getRazaoSocial());
         c.setNomeFantasia(r.getNomeFantasia());
-        c.setCnpj(r.getCnpj());
-        c.setCpf(r.getCpf());
+        c.setCnpj(r.getCnpj() != null && !r.getCnpj().isBlank() ? r.getCnpj() : null);
+        c.setCpf(r.getCpf() != null && !r.getCpf().isBlank() ? r.getCpf() : null);
         c.setTipoPessoa(
                 r.getTipoPessoa() != null ? r.getTipoPessoa() : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA);
         c.setEmail(r.getEmail());

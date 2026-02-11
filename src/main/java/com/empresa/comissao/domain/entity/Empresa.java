@@ -83,7 +83,7 @@ public class Empresa {
 
     @Builder.Default
     @Column(nullable = false)
-    private Integer tenantVersion = 0;
+    private Long tenantVersion = 0L;
 
     @Builder.Default
     private boolean ativo = true; // Mantido por compatibilidade, mas usar status preferencialmente

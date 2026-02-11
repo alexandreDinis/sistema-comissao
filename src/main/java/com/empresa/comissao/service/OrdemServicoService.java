@@ -10,6 +10,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,6 +33,17 @@ public class OrdemServicoService {
         private final FinanceiroService financeiroService;
         private final UserRepository userRepository;
         private final ContaReceberRepository contaReceberRepository;
+
+        @Autowired
+        private TenantVersionService tenantVersionService;
+
+        // ... existing fields ...
+
+        private void bumpTenantVersion(OrdemServico os) {
+                if (os != null && os.getEmpresa() != null) {
+                        tenantVersionService.bump(os.getEmpresa().getId());
+                }
+        }
 
         @Transactional
         public OrdemServicoResponse atualizarStatus(Long id,
@@ -73,6 +85,8 @@ public class OrdemServicoService {
 
                         faturamentoRepository.save(faturamento);
                         log.info("✅ Faturamento gerado com sucesso para OS ID: {} (data: {})", id, dataReferencia);
+
+                        bumpTenantVersion(os);
 
                         // Criar Conta a Receber automaticamente como PENDENTE
                         // Cliente precisa pagar para comissão ser computada
@@ -224,6 +238,7 @@ public class OrdemServicoService {
                 }
 
                 os = osRepository.save(os);
+                bumpTenantVersion(os);
                 return mapToResponse(os);
         }
 
@@ -240,6 +255,7 @@ public class OrdemServicoService {
 
                 os.setStatus(com.empresa.comissao.domain.enums.StatusOrdemServico.CANCELADA);
                 osRepository.save(os);
+                bumpTenantVersion(os);
         }
 
         @Transactional
@@ -294,6 +310,7 @@ public class OrdemServicoService {
                 }
 
                 os = osRepository.save(os);
+                bumpTenantVersion(os);
                 return mapToResponse(os);
         }
 
@@ -395,6 +412,7 @@ public class OrdemServicoService {
 
                 os.getVeiculos().add(veiculo);
                 os = osRepository.save(os);
+                bumpTenantVersion(os);
                 return mapToResponse(os);
         }
 
@@ -517,6 +535,8 @@ public class OrdemServicoService {
                 // To be safe and ensure OS total is persisted:
                 osRepository.save(veiculo.getOrdemServico());
 
+                bumpTenantVersion(veiculo.getOrdemServico());
+
                 return mapToResponse(veiculo.getOrdemServico());
         }
 
@@ -544,8 +564,91 @@ public class OrdemServicoService {
                 // Recalcular totais
                 veiculo.recalcularTotal();
                 osRepository.save(os);
+                bumpTenantVersion(os);
 
                 log.info("🗑️ Peça ID {} removida da OS ID {}", pecaId, os.getId());
+
+                return mapToResponse(os);
+        }
+
+        @Transactional
+        public OrdemServicoResponse atualizarVeiculo(Long id, VeiculoRequest request) {
+                VeiculoServico veiculo = veiculoRepository.findById(id)
+                                .orElseThrow(() -> new EntityNotFoundException("Veículo não encontrado"));
+
+                OrdemServico os = veiculo.getOrdemServico();
+                validarAcesso(os);
+
+                // Normalizar e validar placa
+                if (request.getPlaca() != null) {
+                        String placaNormalizada = com.empresa.comissao.validation.ValidadorPlaca
+                                        .normalizar(request.getPlaca());
+                        com.empresa.comissao.validation.ValidadorPlaca.validar(placaNormalizada);
+                        veiculo.setPlaca(placaNormalizada);
+                }
+                if (request.getModelo() != null) {
+                        veiculo.setModelo(request.getModelo());
+                }
+                if (request.getCor() != null) {
+                        veiculo.setCor(request.getCor());
+                }
+
+                veiculoRepository.save(veiculo);
+                bumpTenantVersion(os);
+                return mapToResponse(os);
+        }
+
+        @Transactional
+        public OrdemServicoResponse atualizarPeca(Long id, PecaServicoRequest request) {
+                PecaServico peca = pecaRepository.findById(id)
+                                .orElseThrow(() -> new EntityNotFoundException("Peça/Serviço não encontrado"));
+
+                VeiculoServico veiculo = peca.getVeiculo();
+                OrdemServico os = veiculo.getOrdemServico();
+                validarAcesso(os);
+
+                // Atualizar tipo de peça se informado
+                if (request.getTipoPecaId() != null) {
+                        TipoPeca tipoPeca = tipoPecaRepository.findById(request.getTipoPecaId())
+                                        .orElseThrow(() -> new EntityNotFoundException(
+                                                        "Peça não encontrada no catálogo"));
+                        peca.setTipoPeca(tipoPeca);
+                }
+
+                // Atualizar valor
+                if (request.getValorCobrado() != null) {
+                        peca.setValor(request.getValorCobrado());
+                }
+
+                // Atualizar descrição
+                if (request.getDescricao() != null) {
+                        peca.setDescricao(request.getDescricao());
+                }
+
+                // Atualizar tipo de execução
+                if (request.getTipoExecucao() != null) {
+                        peca.setTipoExecucao(request.getTipoExecucao());
+                }
+
+                // Atualizar prestador
+                if (request.getPrestadorId() != null) {
+                        Prestador prestador = prestadorRepository.findById(request.getPrestadorId())
+                                        .orElseThrow(() -> new EntityNotFoundException("Prestador não encontrado"));
+                        peca.setPrestador(prestador);
+                }
+                if (request.getCustoPrestador() != null) {
+                        peca.setCustoPrestador(request.getCustoPrestador());
+                }
+                if (request.getDataVencimentoPrestador() != null) {
+                        peca.setDataVencimentoPrestador(request.getDataVencimentoPrestador());
+                }
+
+                pecaRepository.save(peca);
+
+                // Recalcular totais
+                veiculo.recalcularTotal();
+                osRepository.save(os);
+                bumpTenantVersion(os);
 
                 return mapToResponse(os);
         }
@@ -655,12 +758,15 @@ public class OrdemServicoService {
         private VeiculoResponse mapVeiculo(VeiculoServico v) {
                 return VeiculoResponse.builder()
                                 .id(v.getId())
+                                .localId(v.getLocalId())
                                 .placa(v.getPlaca())
                                 .modelo(v.getModelo())
                                 .cor(v.getCor())
                                 .valorTotal(v.getValorTotal())
                                 .pecas(v.getPecas().stream().map(p -> PecaServicoResponse.builder()
                                                 .id(p.getId())
+                                                .localId(p.getLocalId())
+                                                .tipoPecaId(p.getTipoPeca().getId())
                                                 .nomePeca(p.getTipoPeca().getNome())
                                                 .valorCobrado(p.getValor())
                                                 .descricao(p.getDescricao())

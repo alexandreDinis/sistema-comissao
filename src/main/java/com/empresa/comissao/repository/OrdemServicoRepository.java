@@ -19,6 +19,35 @@ public interface OrdemServicoRepository extends JpaRepository<OrdemServico, Long
                         java.time.LocalDate start, java.time.LocalDate end,
                         com.empresa.comissao.domain.entity.Empresa empresa);
 
+        // --- User Scoped Counts ---
+
+        long countByStatusInAndEmpresaAndUsuario(
+                        java.util.Collection<com.empresa.comissao.domain.enums.StatusOrdemServico> statuses,
+                        com.empresa.comissao.domain.entity.Empresa empresa,
+                        com.empresa.comissao.domain.entity.User usuario);
+
+        long countByStatusAndDataBetweenAndEmpresaAndUsuario(
+                        com.empresa.comissao.domain.enums.StatusOrdemServico status,
+                        java.time.LocalDate start, java.time.LocalDate end,
+                        com.empresa.comissao.domain.entity.Empresa empresa,
+                        com.empresa.comissao.domain.entity.User usuario);
+
+        @org.springframework.data.jpa.repository.Query("SELECT COUNT(v) FROM OrdemServico o JOIN o.veiculos v WHERE o.status = :status AND o.data BETWEEN :start AND :end AND o.empresa = :empresa AND o.usuario = :usuario")
+        long countVeiculosByStatusAndDataAndEmpresaAndUsuario(
+                        @org.springframework.data.repository.query.Param("status") com.empresa.comissao.domain.enums.StatusOrdemServico status,
+                        @org.springframework.data.repository.query.Param("start") java.time.LocalDate start,
+                        @org.springframework.data.repository.query.Param("end") java.time.LocalDate end,
+                        @org.springframework.data.repository.query.Param("empresa") com.empresa.comissao.domain.entity.Empresa empresa,
+                        @org.springframework.data.repository.query.Param("usuario") com.empresa.comissao.domain.entity.User usuario);
+
+        @org.springframework.data.jpa.repository.Query("SELECT COUNT(p) FROM OrdemServico o JOIN o.veiculos v JOIN v.pecas p WHERE o.status = :status AND o.data BETWEEN :start AND :end AND o.empresa = :empresa AND o.usuario = :usuario")
+        long countPecasByStatusAndDataAndEmpresaAndUsuario(
+                        @org.springframework.data.repository.query.Param("status") com.empresa.comissao.domain.enums.StatusOrdemServico status,
+                        @org.springframework.data.repository.query.Param("start") java.time.LocalDate start,
+                        @org.springframework.data.repository.query.Param("end") java.time.LocalDate end,
+                        @org.springframework.data.repository.query.Param("empresa") com.empresa.comissao.domain.entity.Empresa empresa,
+                        @org.springframework.data.repository.query.Param("usuario") com.empresa.comissao.domain.entity.User usuario);
+
         @org.springframework.data.jpa.repository.Query("SELECT COUNT(v) FROM OrdemServico o JOIN o.veiculos v WHERE o.status = :status AND o.data BETWEEN :start AND :end AND o.empresa = :empresa")
         long countVeiculosByStatusAndDataAndEmpresa(
                         @org.springframework.data.repository.query.Param("status") com.empresa.comissao.domain.enums.StatusOrdemServico status,

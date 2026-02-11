@@ -103,11 +103,11 @@ public class AuthVersionService {
 
     public static class TenantAccessSnapshot {
         private Long id;
-        private Integer tenantVersion;
+        private Long tenantVersion;
         private StatusEmpresa status;
         private StatusLicenca licencaStatus;
 
-        public TenantAccessSnapshot(Long id, Integer tenantVersion, StatusEmpresa status, StatusLicenca licencaStatus) {
+        public TenantAccessSnapshot(Long id, Long tenantVersion, StatusEmpresa status, StatusLicenca licencaStatus) {
             this.id = id;
             this.tenantVersion = tenantVersion;
             this.status = status;
@@ -118,7 +118,7 @@ public class AuthVersionService {
             return id;
         }
 
-        public Integer getTenantVersion() {
+        public Long getTenantVersion() {
             return tenantVersion;
         }
 

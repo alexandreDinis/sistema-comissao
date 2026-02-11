@@ -86,7 +86,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         Claims claims = jwtService.extractAllClaims(jwt);
         Long tenantId = claims.get("tid", Long.class);
         Integer userVersionToken = claims.get("v_u", Integer.class);
-        Integer tenantVersionToken = claims.get("v_t", Integer.class);
+
+        // Fix: Handle v_t as Long safely (it might be Integer in token)
+        Number tenantVersionClaim = claims.get("v_t", Number.class);
+        Long tenantVersionToken = tenantVersionClaim != null ? tenantVersionClaim.longValue() : null;
+
         @SuppressWarnings("unchecked")
         List<String> rolesToken = (List<String>) claims.get("roles");
         @SuppressWarnings("unchecked")

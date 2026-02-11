@@ -29,7 +29,15 @@ public class DashboardController {
     @Operation(summary = "Get Dashboard Stats", description = "Returns active OSs, finalized OSs (month), distinct vehicles (month), and total parts (month).")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA', 'USER')")
     public ResponseEntity<DashboardStatsResponse> getStats(
-            @AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal principal) {
+            @AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal principal,
+            org.springframework.security.core.Authentication authentication) {
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
+                        || a.getAuthority().equals("ROLE_ADMIN_EMPRESA")
+                        || a.getAuthority().equals("ROLE_SUPER_ADMIN")
+                        || a.getAuthority().equals("ROLE_ADMIN_LICENCA"));
+
         User usuario = new User();
         usuario.setId(principal.getUserId());
         usuario.setEmail(principal.getEmail());
@@ -37,14 +45,21 @@ public class DashboardController {
         empresa.setId(principal.getTenantId());
         usuario.setEmpresa(empresa);
 
-        return ResponseEntity.ok(dashboardService.getStats(usuario));
+        return ResponseEntity.ok(dashboardService.getStats(usuario, isAdmin));
     }
 
     @GetMapping("/overview")
     @Operation(summary = "Get Dashboard Overview", description = "Returns consolidated dashboard data (stats + YoY) in a single request.")
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA', 'USER')")
     public ResponseEntity<com.empresa.comissao.dto.response.DashboardOverviewDTO> getOverview(
-            @AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal principal) {
+            @AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal principal,
+            org.springframework.security.core.Authentication authentication) {
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")
+                        || a.getAuthority().equals("ROLE_ADMIN_EMPRESA")
+                        || a.getAuthority().equals("ROLE_SUPER_ADMIN")
+                        || a.getAuthority().equals("ROLE_ADMIN_LICENCA"));
 
         User usuario = new User();
         usuario.setId(principal.getUserId());
@@ -53,7 +68,7 @@ public class DashboardController {
         empresa.setId(principal.getTenantId());
         usuario.setEmpresa(empresa);
 
-        return ResponseEntity.ok(dashboardService.getOverview(usuario));
+        return ResponseEntity.ok(dashboardService.getOverview(usuario, isAdmin));
     }
 
     @GetMapping("/yoy/{ano}/{mes}")
