@@ -45,6 +45,26 @@ public class OrdemServicoService {
                 }
         }
 
+        /**
+         * 🔐 Security: Valida se o usuário pode ser atribuído a uma OS deste tenant.
+         * Deve pertencer à mesma empresa e ter role FUNCIONARIO ou ADMIN_EMPRESA.
+         */
+        private void validarAtribuicaoUsuario(User user, Empresa empresa) {
+                if (user == null)
+                        return;
+
+                if (user.getEmpresa() == null || !user.getEmpresa().getId().equals(empresa.getId())) {
+                        throw new IllegalArgumentException("O usuário selecionado não pertence a esta empresa.");
+                }
+
+                com.empresa.comissao.domain.enums.Role role = user.getRole();
+                if (role != com.empresa.comissao.domain.enums.Role.ADMIN_EMPRESA
+                                && role != com.empresa.comissao.domain.enums.Role.FUNCIONARIO) {
+                        throw new IllegalArgumentException(
+                                        "O usuário selecionado não tem permissão para ser um responsável técnico (Role inválida).");
+                }
+        }
+
         @Transactional
         public OrdemServicoResponse atualizarStatus(Long id,
                         com.empresa.comissao.domain.enums.StatusOrdemServico novoStatus) {
@@ -216,6 +236,8 @@ public class OrdemServicoService {
                                                 .orElseThrow(() -> new EntityNotFoundException(
                                                                 "Usuário não encontrado"));
 
+                                validarAtribuicaoUsuario(newUser, os.getEmpresa());
+
                                 os.setUsuario(newUser);
 
                                 // Propagate to Faturamento and ContaReceber if they exist
@@ -304,6 +326,9 @@ public class OrdemServicoService {
                                         .findById(request.getUsuarioId())
                                         .orElseThrow(() -> new EntityNotFoundException(
                                                         "Usuário indicado não encontrado"));
+
+                        validarAtribuicaoUsuario(targetUser, empresa);
+
                         os.setUsuario(targetUser);
                 } else if (usuario != null) {
                         os.setUsuario(usuario);
@@ -342,6 +367,9 @@ public class OrdemServicoService {
                                         .findById(request.getUsuarioId())
                                         .orElseThrow(() -> new EntityNotFoundException(
                                                         "Usuário indicado não encontrado"));
+
+                        validarAtribuicaoUsuario(targetUser, os.getEmpresa());
+
                         os.setUsuario(targetUser);
                 }
 

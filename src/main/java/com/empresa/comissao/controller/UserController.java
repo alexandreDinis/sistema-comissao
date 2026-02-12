@@ -113,10 +113,11 @@ public class UserController {
             return ResponseEntity.ok(java.util.Collections.emptyList());
         }
 
-        // Retorna todos os usuários ativos da mesma empresa
+        // Retorna todos os usuários ativos da mesma empresa que possuem papéis de
+        // tenant legítimos
         java.util.List<User> users = repository.findByEmpresa(principal.getEmpresa())
                 .stream()
-                .filter(User::isActive)
+                .filter(u -> u.isActive() && (u.getRole() == Role.ADMIN_EMPRESA || u.getRole() == Role.FUNCIONARIO))
                 .collect(java.util.stream.Collectors.toList());
 
         java.util.List<UserResponse> response = users.stream()
