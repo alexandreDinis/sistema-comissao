@@ -11,6 +11,8 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long>,
                 org.springframework.data.jpa.repository.JpaSpecificationExecutor<Cliente> {
         Optional<Cliente> findByCnpj(String cnpj);
 
+        Optional<Cliente> findByCorrelationId(String correlationId);
+
         // Multi-tenant: busca CNPJ dentro da empresa específica
         Optional<Cliente> findByCnpjAndEmpresa(String cnpj, com.empresa.comissao.domain.entity.Empresa empresa);
 

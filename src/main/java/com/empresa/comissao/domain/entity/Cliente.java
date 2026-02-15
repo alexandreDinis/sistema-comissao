@@ -62,6 +62,9 @@ public class Cliente {
     @Column(name = "local_id", nullable = false)
     private String localId;
 
+    @Column(name = "correlation_id")
+    private String correlationId;
+
     @Column(name = "deleted_at")
     private java.time.LocalDateTime deletedAt;
 

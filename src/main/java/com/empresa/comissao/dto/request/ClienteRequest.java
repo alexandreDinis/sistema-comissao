@@ -31,4 +31,6 @@ public class ClienteRequest {
     private String cidade;
     private String estado;
     private String cep;
+
+    private String correlationId;
 }

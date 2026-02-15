@@ -19,6 +19,15 @@ public class ClienteService {
 
     @Transactional
     public ClienteResponse criar(ClienteRequest request) {
+        // Idempotency Check (Correlation ID)
+        if (request.getCorrelationId() != null && !request.getCorrelationId().isBlank()) {
+            java.util.Optional<Cliente> existing = clienteRepository.findByCorrelationId(request.getCorrelationId());
+            if (existing.isPresent()) {
+                // Return existing to preventing duplicates
+                return mapToResponse(existing.get());
+            }
+        }
+
         validarDocumentos(request);
 
         Cliente cliente = new Cliente();
@@ -140,13 +149,15 @@ public class ClienteService {
 
         if (r.getEndereco() != null)
             c.setEndereco(r.getEndereco());
+
+        if (r.getCorrelationId() != null)
+            c.setCorrelationId(r.getCorrelationId());
     }
 
     private ClienteResponse mapToResponse(Cliente c) {
         return ClienteResponse.builder()
                 .id(c.getId())
                 .razaoSocial(c.getRazaoSocial())
-                .nomeFantasia(c.getNomeFantasia())
                 .nomeFantasia(c.getNomeFantasia())
                 .cnpj(c.getCnpj())
                 .cpf(c.getCpf())
@@ -162,6 +173,7 @@ public class ClienteService {
                 .estado(c.getEstado())
                 .cep(c.getCep())
                 .localId(c.getLocalId())
+                .correlationId(c.getCorrelationId())
                 .deletedAt(
                         c.getDeletedAt() != null ? c.getDeletedAt().atZone(java.time.ZoneId.systemDefault()).toInstant()
                                 : null)
