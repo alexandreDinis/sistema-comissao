@@ -84,6 +84,26 @@ public class OrdemServicoController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/grid")
+    @Operation(summary = "Listar OS com paginação e filtros (Web)", description = "Endpoint otimizado para grid do frontend")
+    public ResponseEntity<org.springframework.data.domain.Page<OrdemServicoResponse>> listarGrid(
+            org.springframework.data.domain.Pageable pageable,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
+            @RequestParam(required = false) Boolean atrasado) {
+
+        // Ensure default sort if not present
+        if (pageable.getSort().isUnsorted()) {
+            pageable = org.springframework.data.domain.PageRequest.of(
+                    pageable.getPageNumber(),
+                    pageable.getPageSize(),
+                    org.springframework.data.domain.Sort.by("data").descending());
+        }
+
+        return ResponseEntity.ok(osService.listarPaginated(pageable, status, search, date, atrasado));
+    }
+
     @PatchMapping("/{id}/status")
     @Operation(summary = "Atualizar Status da OS")
     public ResponseEntity<OrdemServicoResponse> atualizarStatus(@PathVariable Long id,

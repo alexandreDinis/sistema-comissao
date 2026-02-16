@@ -6,7 +6,8 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface OrdemServicoRepository extends JpaRepository<OrdemServico, Long> {
+public interface OrdemServicoRepository extends JpaRepository<OrdemServico, Long>,
+                org.springframework.data.jpa.repository.JpaSpecificationExecutor<OrdemServico> {
         List<OrdemServico> findByClienteId(Long clienteId);
 
         List<OrdemServico> findByEmpresa(com.empresa.comissao.domain.entity.Empresa empresa);

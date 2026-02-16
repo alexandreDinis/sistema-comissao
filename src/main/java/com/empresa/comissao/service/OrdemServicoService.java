@@ -750,6 +750,49 @@ public class OrdemServicoService {
                 return java.util.Collections.emptyList();
         }
 
+        public org.springframework.data.domain.Page<OrdemServicoResponse> listarPaginated(
+                        org.springframework.data.domain.Pageable pageable,
+                        String status,
+                        String search,
+                        java.time.LocalDate date,
+                        Boolean atrasado) {
+
+                Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+                if (tenantId == null) {
+                        return org.springframework.data.domain.Page.empty();
+                }
+
+                com.empresa.comissao.domain.entity.User usuario = null;
+                org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+                                .getContext().getAuthentication();
+
+                boolean isAdmin = auth.getAuthorities().stream()
+                                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN_EMPRESA") ||
+                                                a.getAuthority().equals("ROLE_SUPER_ADMIN") ||
+                                                a.getAuthority().equals("ROLE_ADMIN_LICENCA"));
+
+                if (!isAdmin) {
+                        // Simplify user retrieval logic
+                        if (auth.getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal) {
+                                Long userId = ((com.empresa.comissao.security.AuthPrincipal) auth.getPrincipal())
+                                                .getUserId();
+                                usuario = userRepository.findById(userId).orElse(null);
+                        } else if (auth.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
+                                usuario = (com.empresa.comissao.domain.entity.User) auth.getPrincipal();
+                        }
+                }
+
+                // 1. First Query: Find IDs with Filters (Efficient Count + Pagination)
+                org.springframework.data.jpa.domain.Specification<OrdemServico> spec = com.empresa.comissao.repository.spec.OrdemServicoSpecification
+                                .withFilter(tenantId, usuario, status, search, date, atrasado);
+
+                // Optimized Query: Find All with Filters AND Fetches (via Specification)
+                // Note: The Specification now handles JOIN FETCH for relations to avoid N+1.
+                org.springframework.data.domain.Page<OrdemServico> page = osRepository.findAll(spec, pageable);
+
+                return page.map(this::mapToResponse);
+        }
+
         private OrdemServicoResponse mapToResponse(OrdemServico os) {
                 // Calculate if overdue: status=EM_EXECUCAO and due date past today
                 boolean atrasado = os.getStatus() == com.empresa.comissao.domain.enums.StatusOrdemServico.EM_EXECUCAO
