@@ -13,13 +13,21 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Conta a Receber (entrada de caixa).
  * Representa um direito de recebimento da empresa.
- * 
- * IMPORTANTE: Comissão é calculada sobre ContaReceber.PAGO,
- * não sobre Faturamento (competência).
+ *
+ * IMPORTANTE: Comissão é calculada sobre Recebimento.valorPago
+ * (registros na tabela recebimentos), não sobre ContaReceber.valor.
+ *
+ * Suporta pagamentos parciais:
+ * - PENDENTE: nada recebido (saldoRestante == valor)
+ * - PARCIAL: recebeu algo (0 < saldoRestante < valor)
+ * - PAGO: totalmente quitado (saldoRestante == 0)
+ * - BAIXADO: calote/perdão (saldoRestante zerado sem entrada de caixa)
  */
 @Entity
 @Table(name = "contas_receber")
@@ -33,11 +41,26 @@ public class ContaReceber {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Optimistic Locking: impede gravações concorrentes em saldoRestante
+    @Version
+    private Long version;
+
     @Column(length = 255)
     private String descricao;
 
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal valor;
+
+    // Campos de controle de pagamento parcial
+    @Column(name = "valor_pago_acumulado", nullable = false, precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal valorPagoAcumulado = BigDecimal.ZERO;
+
+    @Column(name = "saldo_restante", precision = 19, scale = 2)
+    private BigDecimal saldoRestante;
+
+    @Column(columnDefinition = "TEXT")
+    private String observacao;
 
     // DATAS IMPORTANTES
     @Column(name = "data_competencia", nullable = false)
@@ -47,7 +70,7 @@ public class ContaReceber {
     private LocalDate dataVencimento; // Quando DEVE ser recebido
 
     @Column(name = "data_recebimento")
-    private LocalDate dataRecebimento; // Quando FOI recebido (null = pendente)
+    private LocalDate dataRecebimento; // Quando FOI totalmente recebido (null = não quitado)
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -88,6 +111,12 @@ public class ContaReceber {
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa;
 
+    // HISTÓRICO DE RECEBIMENTOS
+    @OneToMany(mappedBy = "contaReceber", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties({ "contaReceber" })
+    @Builder.Default
+    private List<Recebimento> recebimentos = new ArrayList<>();
+
     // AUDITORIA
     @Column(name = "data_criacao", nullable = false, updatable = false)
     private LocalDateTime dataCriacao;
@@ -102,6 +131,12 @@ public class ContaReceber {
         if (status == null) {
             status = StatusConta.PENDENTE;
         }
+        if (valorPagoAcumulado == null) {
+            valorPagoAcumulado = BigDecimal.ZERO;
+        }
+        if (saldoRestante == null) {
+            saldoRestante = valor;
+        }
     }
 
     @PreUpdate
@@ -112,20 +147,77 @@ public class ContaReceber {
     /**
      * Verifica se a conta está vencida.
      * VENCIDO é derivado, não persistido.
+     * Aplica-se a contas PENDENTE e PARCIAL.
      */
     public boolean isVencido() {
-        return status == StatusConta.PENDENTE
+        return (status == StatusConta.PENDENTE || status == StatusConta.PARCIAL)
                 && dataVencimento != null
                 && LocalDate.now().isAfter(dataVencimento);
     }
 
     /**
-     * Marca a conta como recebida.
+     * Registra um recebimento parcial ou total.
+     * Atualiza valorPagoAcumulado, saldoRestante e status.
+     *
+     * @param valorRecebido valor efetivamente recebido
+     * @throws IllegalArgumentException se valor > saldoRestante
      */
+    public void registrarRecebimento(BigDecimal valorRecebido) {
+        if (valorRecebido.compareTo(saldoRestante) > 0) {
+            throw new IllegalArgumentException(
+                    "Valor recebido (" + valorRecebido + ") excede o saldo restante (" + saldoRestante + ")");
+        }
+
+        this.valorPagoAcumulado = this.valorPagoAcumulado.add(valorRecebido);
+        this.saldoRestante = this.saldoRestante.subtract(valorRecebido);
+
+        if (this.saldoRestante.compareTo(BigDecimal.ZERO) == 0) {
+            this.status = StatusConta.PAGO;
+            this.dataRecebimento = LocalDate.now(); // Data de quitação total
+        } else {
+            this.status = StatusConta.PARCIAL;
+        }
+    }
+
+    /**
+     * Estorna um recebimento: devolve valor ao saldo.
+     *
+     * @param valorEstornado valor a devolver ao saldo
+     */
+    public void estornarRecebimento(BigDecimal valorEstornado) {
+        this.valorPagoAcumulado = this.valorPagoAcumulado.subtract(valorEstornado);
+        this.saldoRestante = this.saldoRestante.add(valorEstornado);
+        this.dataRecebimento = null; // Não está mais quitado
+
+        if (this.valorPagoAcumulado.compareTo(BigDecimal.ZERO) == 0) {
+            this.status = StatusConta.PENDENTE;
+        } else {
+            this.status = StatusConta.PARCIAL;
+        }
+    }
+
+    /**
+     * Baixa o saldo restante (calote/perdão).
+     * NÃO gera Recebimento, portanto NÃO entra no cálculo de comissão.
+     */
+    public void baixarSaldo(String motivo) {
+        this.saldoRestante = BigDecimal.ZERO;
+        this.status = StatusConta.BAIXADO;
+        this.observacao = motivo;
+    }
+
+    /**
+     * Marca a conta como recebida (backward compatibility).
+     * 
+     * @deprecated Use registrarRecebimento() para suporte a pagamentos parciais.
+     */
+    @Deprecated
     public void marcarComoRecebido(LocalDate dataRecebimento, MeioPagamento meioPagamento) {
         this.dataRecebimento = dataRecebimento;
         this.meioPagamento = meioPagamento;
         this.status = StatusConta.PAGO;
+        this.valorPagoAcumulado = this.valor;
+        this.saldoRestante = BigDecimal.ZERO;
     }
 
     /**

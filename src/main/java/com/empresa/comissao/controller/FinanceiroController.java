@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import com.empresa.comissao.domain.entity.Recebimento;
 
 /**
  * Controller para o módulo financeiro.
@@ -114,6 +115,58 @@ public class FinanceiroController {
                 id,
                 request.dataRecebimento() != null ? request.dataRecebimento() : LocalDate.now(),
                 request.meioPagamento());
+        return ResponseEntity.ok(conta);
+    }
+
+    @PostMapping("/contas-receber/{id}/recebimento-parcial")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<ContaReceber> registrarRecebimentoParcial(
+            @PathVariable Long id,
+            @RequestBody RecebimentoParcialRequest request) {
+
+        ContaReceber conta = financeiroService.registrarRecebimentoParcial(
+                id,
+                request.valor(),
+                request.dataRecebimento() != null ? request.dataRecebimento() : LocalDate.now(),
+                request.meioPagamento(),
+                request.observacao());
+        return ResponseEntity.ok(conta);
+    }
+
+    @PostMapping("/contas-receber/{id}/baixar")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<ContaReceber> baixarSaldo(
+            @PathVariable Long id,
+            @RequestBody BaixarSaldoRequest request) {
+
+        ContaReceber conta = financeiroService.baixarSaldo(id, request.motivo());
+        return ResponseEntity.ok(conta);
+    }
+
+    @DeleteMapping("/contas-receber/recebimentos/{recebimentoId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<ContaReceber> estornarRecebimento(
+            @PathVariable Long recebimentoId) {
+
+        ContaReceber conta = financeiroService.estornarRecebimento(recebimentoId);
+        return ResponseEntity.ok(conta);
+    }
+
+    @GetMapping("/contas-receber/{id}/recebimentos")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<List<Recebimento>> listarRecebimentos(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(financeiroService.listarRecebimentos(id));
+    }
+
+    @PatchMapping("/contas-receber/{id}/vencimento")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
+    public ResponseEntity<ContaReceber> atualizarVencimento(
+            @PathVariable Long id,
+            @RequestBody AtualizarVencimentoRequest request) {
+
+        ContaReceber conta = financeiroService.atualizarVencimento(id, request.novaDataVencimento());
         return ResponseEntity.ok(conta);
     }
 
@@ -324,5 +377,20 @@ public class FinanceiroController {
             LocalDate dataCompetencia,
             LocalDate dataVencimento,
             String descricao) {
+    }
+
+    public record RecebimentoParcialRequest(
+            BigDecimal valor,
+            LocalDate dataRecebimento,
+            MeioPagamento meioPagamento,
+            String observacao) {
+    }
+
+    public record BaixarSaldoRequest(
+            String motivo) {
+    }
+
+    public record AtualizarVencimentoRequest(
+            LocalDate novaDataVencimento) {
     }
 }

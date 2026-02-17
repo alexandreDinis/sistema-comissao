@@ -750,6 +750,7 @@ public class OrdemServicoService {
                 return java.util.Collections.emptyList();
         }
 
+        @Transactional(readOnly = true)
         public org.springframework.data.domain.Page<OrdemServicoResponse> listarPaginated(
                         org.springframework.data.domain.Pageable pageable,
                         String status,

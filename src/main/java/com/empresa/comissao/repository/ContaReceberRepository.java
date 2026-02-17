@@ -49,16 +49,16 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
         List<ContaReceber> findByFuncionarioResponsavelAndEmpresaOrderByDataRecebimentoAsc(User funcionario,
                         Empresa empresa);
 
-        // Buscar vencidas (para alertas)
+        // Buscar vencidas (para alertas) - inclui PENDENTE e PARCIAL
         @Query("SELECT c FROM ContaReceber c WHERE c.empresa = :empresa " +
-                        "AND c.status = 'PENDENTE' AND c.dataVencimento < :hoje")
+                        "AND c.status IN ('PENDENTE', 'PARCIAL') AND c.dataVencimento < :hoje")
         List<ContaReceber> findVencidasByEmpresa(
                         @Param("empresa") Empresa empresa,
                         @Param("hoje") LocalDate hoje);
 
-        // Soma de contas pendentes por empresa
-        @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaReceber c " +
-                        "WHERE c.empresa = :empresa AND c.status = 'PENDENTE'")
+        // Soma de saldo restante por empresa (pendentes + parciais)
+        @Query("SELECT COALESCE(SUM(c.saldoRestante), 0) FROM ContaReceber c " +
+                        "WHERE c.empresa = :empresa AND c.status IN ('PENDENTE', 'PARCIAL')")
         BigDecimal sumPendentesByEmpresa(@Param("empresa") Empresa empresa);
 
         // Soma por período (competência) - para DRE
@@ -116,9 +116,9 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
                         @Param("inicio") LocalDate inicio,
                         @Param("fim") LocalDate fim);
 
-        // Contar pendentes a vencer nos próximos X dias
+        // Contar pendentes/parciais a vencer nos próximos X dias
         @Query("SELECT COUNT(c) FROM ContaReceber c WHERE c.empresa = :empresa " +
-                        "AND c.status = 'PENDENTE' AND c.dataVencimento BETWEEN :hoje AND :limite")
+                        "AND c.status IN ('PENDENTE', 'PARCIAL') AND c.dataVencimento BETWEEN :hoje AND :limite")
         long countVencendoProximos(
                         @Param("empresa") Empresa empresa,
                         @Param("hoje") LocalDate hoje,
@@ -165,7 +165,8 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
                         "FROM ContaReceber c " +
                         "LEFT JOIN c.cliente cli " +
                         "WHERE c.empresa = :empresa " +
-                        "AND c.status = com.empresa.comissao.domain.enums.StatusConta.PENDENTE " +
+                        "AND c.status IN (com.empresa.comissao.domain.enums.StatusConta.PENDENTE, " +
+                        "com.empresa.comissao.domain.enums.StatusConta.PARCIAL) " +
                         "ORDER BY c.dataVencimento ASC")
         java.util.List<com.empresa.comissao.dto.list.ContaResumoDTO> findTop10VencendoProximos(
                         @Param("empresa") com.empresa.comissao.domain.entity.Empresa empresa,

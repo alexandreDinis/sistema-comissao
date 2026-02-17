@@ -30,7 +30,9 @@ public class OrdemServicoSpecification {
                 root.fetch("cliente", jakarta.persistence.criteria.JoinType.LEFT);
                 jakarta.persistence.criteria.Fetch<Object, Object> v = root.fetch("veiculos",
                         jakarta.persistence.criteria.JoinType.LEFT);
-                v.fetch("pecas", jakarta.persistence.criteria.JoinType.LEFT);
+                jakarta.persistence.criteria.Fetch<Object, Object> p = v.fetch("pecas",
+                        jakarta.persistence.criteria.JoinType.LEFT);
+                p.fetch("tipoPeca", jakarta.persistence.criteria.JoinType.LEFT);
 
                 // Essential for correct pagination with collection fetches
                 query.distinct(true);

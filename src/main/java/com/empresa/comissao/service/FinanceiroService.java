@@ -5,6 +5,7 @@ import com.empresa.comissao.domain.enums.*;
 import com.empresa.comissao.exception.BusinessException;
 import com.empresa.comissao.repository.ContaPagarRepository;
 import com.empresa.comissao.repository.ContaReceberRepository;
+import com.empresa.comissao.repository.RecebimentoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class FinanceiroService {
 
         private final ContaPagarRepository contaPagarRepository;
         private final ContaReceberRepository contaReceberRepository;
+        private final RecebimentoRepository recebimentoRepository;
         private final com.empresa.comissao.repository.FaturamentoRepository faturamentoRepository;
         private final ComissaoService comissaoService;
 
@@ -465,18 +467,21 @@ public class FinanceiroService {
                                                                 ? faturamento.getOrdemServico().getId()
                                                                 : "N/A"))
                                 .valor(faturamento.getValor())
+                                .valorPagoAcumulado(BigDecimal.ZERO)
+                                .saldoRestante(faturamento.getValor())
                                 .dataCompetencia(faturamento.getDataFaturamento())
                                 .dataVencimento(dataVencimento)
                                 .tipo(TipoContaReceber.ORDEM_SERVICO)
                                 .faturamento(faturamento)
                                 .ordemServico(faturamento.getOrdemServico())
-                                .funcionarioResponsavel(faturamento.getUsuario()) // Para cálculo de comissão individual
+                                .funcionarioResponsavel(faturamento.getUsuario())
                                 .meioPagamento(meioPagamento);
 
                 if (pagamentoAvista) {
-                        // Pagamento à vista: já está pago
                         builder.status(StatusConta.PAGO)
-                                        .dataRecebimento(faturamento.getDataFaturamento());
+                                        .dataRecebimento(faturamento.getDataFaturamento())
+                                        .valorPagoAcumulado(faturamento.getValor())
+                                        .saldoRestante(BigDecimal.ZERO);
                         log.info("💵 Pagamento à vista detectado");
                 } else {
                         builder.status(StatusConta.PENDENTE);
@@ -485,6 +490,22 @@ public class FinanceiroService {
 
                 ContaReceber conta = builder.build();
                 ContaReceber salva = contaReceberRepository.save(conta);
+
+                // Se à vista, criar Recebimento automático
+                if (pagamentoAvista) {
+                        Recebimento recebimento = Recebimento.builder()
+                                        .contaReceber(salva)
+                                        .valorPago(faturamento.getValor())
+                                        .dataPagamento(faturamento.getDataFaturamento())
+                                        .meioPagamento(meioPagamento)
+                                        .empresa(faturamento.getEmpresa())
+                                        .funcionarioResponsavel(faturamento.getUsuario())
+                                        .observacao("Pagamento à vista na finalização da OS")
+                                        .build();
+                        recebimentoRepository.save(recebimento);
+                        log.info("💰 Recebimento automático criado para pagamento à vista");
+                }
+
                 log.info("✅ Conta a receber criada com ID: {} - Status: {}", salva.getId(), salva.getStatus());
                 return salva;
         }
@@ -492,37 +513,180 @@ public class FinanceiroService {
         /**
          * Marca uma conta a receber como recebida.
          */
+        /**
+         * Backward-compatible: recebe o valor total restante.
+         * Delega para registrarRecebimentoParcial.
+         */
         @Transactional
         public ContaReceber receberConta(Long contaId, LocalDate dataRecebimento, MeioPagamento meioPagamento) {
                 ContaReceber conta = contaReceberRepository.findById(contaId)
                                 .orElseThrow(() -> new BusinessException("Conta a receber não encontrada: " + contaId));
+                return registrarRecebimentoParcial(contaId, conta.getSaldoRestante(),
+                                dataRecebimento, meioPagamento, null);
+        }
 
-                if (conta.getStatus() == StatusConta.PAGO) {
-                        throw new BusinessException("Conta já está recebida");
+        /**
+         * Registra um recebimento parcial ou total.
+         * Cria registro na tabela recebimentos e atualiza saldo da conta.
+         * 
+         * @Transactional garante atomicidade.
+         */
+        @Transactional
+        public ContaReceber registrarRecebimentoParcial(Long contaId, BigDecimal valorRecebido,
+                        LocalDate dataRecebimento, MeioPagamento meioPagamento, String observacao) {
+
+                ContaReceber conta = contaReceberRepository.findById(contaId)
+                                .orElseThrow(() -> new BusinessException("Conta a receber não encontrada: " + contaId));
+
+                if (conta.getStatus() == StatusConta.PAGO || conta.getStatus() == StatusConta.BAIXADO) {
+                        throw new BusinessException("Conta já está quitada ou baixada");
                 }
 
-                conta.marcarComoRecebido(dataRecebimento, meioPagamento);
-                ContaReceber salva = contaReceberRepository.save(conta);
-                log.info("✅ Conta {} marcada como recebida em {}", contaId, dataRecebimento);
+                if (valorRecebido == null || valorRecebido.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new BusinessException("Valor do recebimento deve ser maior que zero");
+                }
 
-                // INVALIDAR CACHE DE COMISSÃO
+                if (valorRecebido.compareTo(conta.getSaldoRestante()) > 0) {
+                        throw new BusinessException("Valor recebido (" + valorRecebido
+                                        + ") excede o saldo restante (" + conta.getSaldoRestante() + ")");
+                }
+
+                // 1. Criar registro de recebimento
+                Recebimento recebimento = Recebimento.builder()
+                                .contaReceber(conta)
+                                .valorPago(valorRecebido)
+                                .dataPagamento(dataRecebimento != null ? dataRecebimento : LocalDate.now())
+                                .meioPagamento(meioPagamento)
+                                .observacao(observacao)
+                                .empresa(conta.getEmpresa())
+                                .funcionarioResponsavel(conta.getFuncionarioResponsavel())
+                                .build();
+                recebimentoRepository.save(recebimento);
+
+                // 2. Atualizar saldo da conta (domain logic)
+                conta.registrarRecebimento(valorRecebido);
+                if (meioPagamento != null) {
+                        conta.setMeioPagamento(meioPagamento);
+                }
+
+                ContaReceber salva;
                 try {
-                        java.time.YearMonth mesReferencia = java.time.YearMonth.from(dataRecebimento);
+                        salva = contaReceberRepository.save(conta);
+                } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+                        throw new BusinessException(
+                                        "Conta atualizada por outro usuário. Recarregue e tente novamente.");
+                }
 
-                        // 1. Invalidate Company Cache (Coletiva mode uses this)
+                log.info("✅ Recebimento de R$ {} registrado para conta {} | Status: {} | Saldo: {}",
+                                valorRecebido, contaId, salva.getStatus(), salva.getSaldoRestante());
+
+                // 3. Invalidar cache de comissão
+                invalidarCacheComissao(conta, dataRecebimento != null ? dataRecebimento : LocalDate.now());
+
+                return salva;
+        }
+
+        /**
+         * Baixa o saldo restante de uma conta (calote/perdão).
+         * NÃO cria Recebimento, portanto NÃO entra no cálculo de comissão.
+         */
+        @Transactional
+        public ContaReceber baixarSaldo(Long contaId, String motivo) {
+                ContaReceber conta = contaReceberRepository.findById(contaId)
+                                .orElseThrow(() -> new BusinessException("Conta a receber não encontrada: " + contaId));
+
+                if (conta.getStatus() == StatusConta.PAGO) {
+                        throw new BusinessException("Conta já está totalmente paga");
+                }
+                if (conta.getStatus() == StatusConta.BAIXADO) {
+                        throw new BusinessException("Conta já foi baixada");
+                }
+
+                if (motivo == null || motivo.isBlank()) {
+                        throw new BusinessException("Motivo da baixa é obrigatório");
+                }
+
+                BigDecimal valorBaixado = conta.getSaldoRestante();
+                conta.baixarSaldo(motivo);
+
+                ContaReceber salva = contaReceberRepository.save(conta);
+                log.info("📝 Conta {} BAIXADA. Valor perdido: R$ {} | Motivo: {}",
+                                contaId, valorBaixado, motivo);
+                return salva;
+        }
+
+        /**
+         * Estorna um recebimento: devolve o valor ao saldo da conta.
+         */
+        @Transactional
+        public ContaReceber estornarRecebimento(Long recebimentoId) {
+                Recebimento recebimento = recebimentoRepository.findById(recebimentoId)
+                                .orElseThrow(() -> new BusinessException(
+                                                "Recebimento não encontrado: " + recebimentoId));
+
+                ContaReceber conta = recebimento.getContaReceber();
+                BigDecimal valorEstornado = recebimento.getValorPago();
+
+                // Devolver valor ao saldo
+                conta.estornarRecebimento(valorEstornado);
+
+                // Deletar o registro de recebimento
+                recebimentoRepository.delete(recebimento);
+                ContaReceber salva = contaReceberRepository.save(conta);
+
+                log.info("↩️ Estorno de R$ {} na conta {} | Novo status: {} | Novo saldo: {}",
+                                valorEstornado, conta.getId(), salva.getStatus(), salva.getSaldoRestante());
+
+                // Invalidar cache de comissão
+                invalidarCacheComissao(conta, recebimento.getDataPagamento());
+
+                return salva;
+        }
+
+        /**
+         * Atualiza a data de vencimento de uma conta (renegociação de prazo).
+         */
+        @Transactional
+        public ContaReceber atualizarVencimento(Long contaId, LocalDate novaDataVencimento) {
+                ContaReceber conta = contaReceberRepository.findById(contaId)
+                                .orElseThrow(() -> new BusinessException("Conta a receber não encontrada: " + contaId));
+
+                if (conta.getStatus() == StatusConta.PAGO || conta.getStatus() == StatusConta.BAIXADO) {
+                        throw new BusinessException("Não é possível renegociar conta já quitada ou baixada");
+                }
+
+                if (novaDataVencimento == null) {
+                        throw new BusinessException("Nova data de vencimento é obrigatória");
+                }
+
+                conta.setDataVencimento(novaDataVencimento);
+                ContaReceber salva = contaReceberRepository.save(conta);
+                log.info("📅 Vencimento da conta {} atualizado para {}", contaId, novaDataVencimento);
+                return salva;
+        }
+
+        /**
+         * Lista histórico de recebimentos de uma conta.
+         */
+        public List<Recebimento> listarRecebimentos(Long contaReceberId) {
+                return recebimentoRepository.findByContaReceberIdOrderByDataPagamentoAsc(contaReceberId);
+        }
+
+        /**
+         * Invalida cache de comissão para empresa e funcionário.
+         */
+        private void invalidarCacheComissao(ContaReceber conta, LocalDate dataReferencia) {
+                try {
+                        YearMonth mesReferencia = YearMonth.from(dataReferencia);
                         if (conta.getEmpresa() != null) {
                                 comissaoService.invalidarCacheEmpresa(conta.getEmpresa(), mesReferencia);
                         }
-
-                        // 2. Invalidate User Cache (Individual mode uses this)
                         if (conta.getFuncionarioResponsavel() != null) {
                                 comissaoService.invalidarCache(conta.getFuncionarioResponsavel(), mesReferencia);
                         }
                 } catch (Exception e) {
                         log.warn("⚠️ Falha ao invalidar cache de comissão: {}", e.getMessage());
                 }
-
-                return salva;
         }
 
         /**
@@ -561,7 +725,8 @@ public class FinanceiroService {
         public BigDecimal getTotalRecebidoNoPeriodo(Empresa empresa, YearMonth periodo) {
                 LocalDate inicio = periodo.atDay(1);
                 LocalDate fim = periodo.atEndOfMonth();
-                return contaReceberRepository.sumByRecebimentoBetween(empresa, inicio, fim);
+                // Usa tabela recebimentos: soma real de caixa, não valor do título
+                return recebimentoRepository.sumByEmpresaAndDataPagamentoBetween(empresa, inicio, fim);
         }
 
         /**
@@ -570,7 +735,9 @@ public class FinanceiroService {
         public BigDecimal getTotalRecebidoPorFuncionario(Empresa empresa, User funcionario, YearMonth periodo) {
                 LocalDate inicio = periodo.atDay(1);
                 LocalDate fim = periodo.atEndOfMonth();
-                return contaReceberRepository.sumByRecebimentoBetweenAndFuncionario(empresa, funcionario, inicio, fim);
+                // Usa tabela recebimentos: comissão individual baseada em caixa real
+                return recebimentoRepository.sumByEmpresaAndFuncionarioAndDataPagamentoBetween(
+                                empresa, funcionario, inicio, fim);
         }
 
         /**

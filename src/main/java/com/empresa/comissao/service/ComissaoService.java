@@ -43,6 +43,7 @@ public class ComissaoService {
         private final com.empresa.comissao.repository.OrdemServicoRepository ordemServicoRepository;
         private final RegraComissaoRepository regraComissaoRepository;
         private final com.empresa.comissao.repository.ContaReceberRepository contaReceberRepository;
+        private final com.empresa.comissao.repository.RecebimentoRepository recebimentoRepository;
         private final com.empresa.comissao.repository.UserRepository userRepository;
         private final com.empresa.comissao.repository.ContaPagarRepository contaPagarRepository;
 
@@ -132,16 +133,17 @@ public class ComissaoService {
                         com.empresa.comissao.domain.enums.ModoComissao modo = usuario.getEmpresa().getModoComissao();
 
                         if (modo == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
-                                // Modo COLETIVA: Faturamento base é o da EMPRESA inteira (Caixa)
-                                faturamentoMensalTotal = contaReceberRepository
-                                                .sumByRecebimentoBetween(usuario.getEmpresa(), inicioDoMes, fimDoMes);
-                                log.info("💰 Faturamento Base (COLETIVA): {}", faturamentoMensalTotal);
+                                // Modo COLETIVA: Soma real de caixa da EMPRESA inteira (Recebimentos)
+                                faturamentoMensalTotal = recebimentoRepository
+                                                .sumByEmpresaAndDataPagamentoBetween(usuario.getEmpresa(), inicioDoMes,
+                                                                fimDoMes);
+                                log.info("💰 Faturamento Base (COLETIVA - Recebimentos): {}", faturamentoMensalTotal);
                         } else {
-                                // Modo INDIVIDUAL: Apenas recebimentos do funcionário
-                                faturamentoMensalTotal = contaReceberRepository
-                                                .sumByRecebimentoBetweenAndFuncionario(
+                                // Modo INDIVIDUAL: Soma recebimentos do funcionário
+                                faturamentoMensalTotal = recebimentoRepository
+                                                .sumByEmpresaAndFuncionarioAndDataPagamentoBetween(
                                                                 usuario.getEmpresa(), usuario, inicioDoMes, fimDoMes);
-                                log.info("💰 Faturamento Base (INDIVIDUAL): {}", faturamentoMensalTotal);
+                                log.info("💰 Faturamento Base (INDIVIDUAL - Recebimentos): {}", faturamentoMensalTotal);
                         }
                 } else {
                         // Fallback: usar faturamento tradicional se não houver empresa
@@ -346,15 +348,15 @@ public class ComissaoService {
                         }
                 }
 
-                // 2. Somar o RECEBIDO total do mês para a empresa (ContaReceber.PAGO)
-                // MUDANÇA CRÍTICA: Comissão empresa agora baseada em CAIXA
+                // 2. Somar o RECEBIDO total do mês para a empresa (Recebimentos reais)
+                // CORREÇÃO CRÍTICA: Usa tabela recebimentos, não contas_receber
                 LocalDate inicioDoMes = anoMesReferencia.atDay(1);
                 LocalDate fimDoMes = anoMesReferencia.atEndOfMonth();
 
-                BigDecimal faturamentoMensalTotal = contaReceberRepository
-                                .sumByRecebimentoBetween(empresa, inicioDoMes, fimDoMes);
+                BigDecimal faturamentoMensalTotal = recebimentoRepository
+                                .sumByEmpresaAndDataPagamentoBetween(empresa, inicioDoMes, fimDoMes);
 
-                log.info("💰 Recebido total da empresa (caixa): {}", faturamentoMensalTotal);
+                log.info("💰 Recebido total da empresa (Recebimentos reais): {}", faturamentoMensalTotal);
 
                 // 3. Sum all adiantamentos for the empresa
                 BigDecimal valorTotalAdiantamentos = pagamentoAdiantadoRepository
