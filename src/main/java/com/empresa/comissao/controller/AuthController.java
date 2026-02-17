@@ -112,6 +112,66 @@ public class AuthController {
                                 .build());
         }
 
+        @PostMapping("/refresh")
+        public ResponseEntity<?> refresh(HttpServletRequest request) {
+                String authHeader = request.getHeader("Authorization");
+
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                        .body(java.util.Map.of("error", "Token não fornecido"));
+                }
+
+                String jwt = authHeader.substring(7);
+
+                // 1. Validar assinatura e expiração (mas ignorar versão antiga)
+                if (!jwtService.isTokenValid(jwt)) {
+                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                        .body(java.util.Map.of("error", "Token inválido ou expirado"));
+                }
+
+                // 2. Extrair user
+                Long userId = jwtService.extractUserId(jwt);
+                if (userId == null) {
+                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                        .body(java.util.Map.of("error", "Token malformado"));
+                }
+
+                // 3. Carregar usuário atualizado do banco (com novas versões)
+                var user = repository.findById(userId).orElse(null);
+                if (user == null || !user.isActive()) {
+                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                                        .body(java.util.Map.of("error", "Usuário não encontrado ou inativo"));
+                }
+
+                // 4. Gerar NOVO token (com versões atualizadas)
+                String newToken = jwtService.generateToken(user);
+
+                // 5. Retornar resposta completa para atualizar estado do app
+                AuthenticationResponse.EmpresaInfo empresaInfo = null;
+                if (user.getEmpresa() != null) {
+                        empresaInfo = AuthenticationResponse.EmpresaInfo.builder()
+                                        .id(user.getEmpresa().getId())
+                                        .nome(user.getEmpresa().getNome())
+                                        .plano(user.getEmpresa().getPlano() != null
+                                                        ? user.getEmpresa().getPlano().name()
+                                                        : null)
+                                        .build();
+                }
+
+                java.util.List<String> features = user.getFeatures() != null
+                                ? user.getFeatures().stream()
+                                                .map(f -> f.getCodigo())
+                                                .collect(java.util.stream.Collectors.toList())
+                                : java.util.Collections.emptyList();
+
+                return ResponseEntity.ok(AuthenticationResponse.builder()
+                                .token(newToken)
+                                .empresa(empresaInfo)
+                                .features(features)
+                                .mustChangePassword(user.isMustChangePassword())
+                                .build());
+        }
+
         @PostMapping("/logout")
         public ResponseEntity<?> logout() {
                 // In a stateless JWT architecture, the server doesn't track sessions.

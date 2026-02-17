@@ -7,4 +7,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface TipoPecaRepository extends JpaRepository<TipoPeca, Long> {
     java.util.List<TipoPeca> findByEmpresa(com.empresa.comissao.domain.entity.Empresa empresa);
+
+    @org.springframework.data.jpa.repository.Query("SELECT MAX(t.updatedAt) FROM TipoPeca t WHERE t.empresa.id = :empresaId")
+    java.time.LocalDateTime findMaxUpdatedAtByEmpresaId(
+            @org.springframework.data.repository.query.Param("empresaId") Long empresaId);
 }

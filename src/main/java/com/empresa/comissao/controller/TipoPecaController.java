@@ -23,16 +23,14 @@ public class TipoPecaController {
     @PostMapping
     @Operation(summary = "Adicionar item ao catálogo")
     public ResponseEntity<TipoPeca> criar(
-            @Valid @RequestBody TipoPecaRequest request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
-        return ResponseEntity.ok(tipoPecaService.criar(request, usuario));
+            @Valid @RequestBody TipoPecaRequest request) {
+        return ResponseEntity.ok(tipoPecaService.criar(request));
     }
 
     @GetMapping
     @Operation(summary = "Listar catálogo")
-    public ResponseEntity<List<TipoPeca>> listar(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
-        return ResponseEntity.ok(tipoPecaService.listarTodos(usuario));
+    public ResponseEntity<List<TipoPeca>> listar() {
+        return ResponseEntity.ok(tipoPecaService.listarTodos());
     }
 
     @DeleteMapping("/{id}")

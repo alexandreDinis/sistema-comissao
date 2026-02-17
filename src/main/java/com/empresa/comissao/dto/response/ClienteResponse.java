@@ -25,6 +25,7 @@ public class ClienteResponse {
     private String cep;
 
     private String localId;
-    private java.time.LocalDateTime deletedAt;
-    private java.time.LocalDateTime updatedAt;
+    private String correlationId;
+    private java.time.Instant deletedAt;
+    private java.time.Instant updatedAt;
 }

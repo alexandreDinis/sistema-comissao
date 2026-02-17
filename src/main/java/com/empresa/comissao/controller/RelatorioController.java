@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,14 +33,10 @@ public class RelatorioController {
         public ResponseEntity<RelatorioFinanceiroDTO> gerarRelatorio(
                         @PathVariable int ano,
                         @PathVariable int mes,
-                        @AuthenticationPrincipal User usuario) {
+                        org.springframework.security.core.Authentication authentication) {
 
-                // Fetch fresh empresa to get latest modoComissao configuration
-                Empresa empresaFresh = null;
-                if (usuario != null && usuario.getEmpresa() != null) {
-                        empresaFresh = empresaRepository.findById(usuario.getEmpresa().getId())
-                                        .orElse(usuario.getEmpresa());
-                }
+                Empresa empresaFresh = resolveEmpresa(authentication);
+                User usuario = resolveUser(authentication, empresaFresh);
 
                 RelatorioFinanceiroDTO relatorio = comissaoService.gerarRelatorioFinanceiro(ano, mes, usuario,
                                 empresaFresh);
@@ -54,14 +49,10 @@ public class RelatorioController {
         public ResponseEntity<byte[]> gerarRelatorioPdf(
                         @PathVariable int ano,
                         @PathVariable int mes,
-                        @AuthenticationPrincipal User usuario) {
+                        org.springframework.security.core.Authentication authentication) {
 
-                // Fetch fresh empresa to get latest modoComissao configuration
-                Empresa empresaFresh = null;
-                if (usuario != null && usuario.getEmpresa() != null) {
-                        empresaFresh = empresaRepository.findById(usuario.getEmpresa().getId())
-                                        .orElse(usuario.getEmpresa());
-                }
+                Empresa empresaFresh = resolveEmpresa(authentication);
+                User usuario = resolveUser(authentication, empresaFresh);
 
                 RelatorioFinanceiroDTO relatorio = comissaoService.gerarRelatorioFinanceiro(ano, mes, usuario,
                                 empresaFresh);
@@ -78,14 +69,10 @@ public class RelatorioController {
         @Operation(summary = "Gerar relatório anual", description = "Retorna relatório consolidado de todos os meses do ano com comparações YoY")
         public ResponseEntity<RelatorioAnualDTO> gerarRelatorioAnual(
                         @PathVariable int ano,
-                        @AuthenticationPrincipal User usuario) {
+                        org.springframework.security.core.Authentication authentication) {
 
-                // Fetch fresh empresa
-                Empresa empresaFresh = null;
-                if (usuario != null && usuario.getEmpresa() != null) {
-                        empresaFresh = empresaRepository.findById(usuario.getEmpresa().getId())
-                                        .orElse(usuario.getEmpresa());
-                }
+                Empresa empresaFresh = resolveEmpresa(authentication);
+                User usuario = resolveUser(authentication, empresaFresh);
 
                 RelatorioAnualDTO relatorio = comissaoService.gerarRelatorioAnual(ano, usuario, empresaFresh);
                 return ResponseEntity.ok(relatorio);
@@ -96,14 +83,10 @@ public class RelatorioController {
         @Operation(summary = "Exportar relatório anual em PDF")
         public ResponseEntity<byte[]> gerarRelatorioAnualPdf(
                         @PathVariable int ano,
-                        @AuthenticationPrincipal User usuario) {
+                        org.springframework.security.core.Authentication authentication) {
 
-                // Fetch fresh empresa
-                Empresa empresaFresh = null;
-                if (usuario != null && usuario.getEmpresa() != null) {
-                        empresaFresh = empresaRepository.findById(usuario.getEmpresa().getId())
-                                        .orElse(usuario.getEmpresa());
-                }
+                Empresa empresaFresh = resolveEmpresa(authentication);
+                User usuario = resolveUser(authentication, empresaFresh);
 
                 RelatorioAnualDTO relatorio = comissaoService.gerarRelatorioAnual(ano, usuario, empresaFresh);
                 byte[] pdfBytes = pdfService.gerarRelatorioAnualPdf(relatorio, empresaFresh);
@@ -120,15 +103,37 @@ public class RelatorioController {
         public ResponseEntity<java.util.List<com.empresa.comissao.dto.response.RankingClienteDTO>> getRankingClientes(
                         @org.springframework.web.bind.annotation.RequestParam int ano,
                         @org.springframework.web.bind.annotation.RequestParam(required = false) Integer mes,
-                        @AuthenticationPrincipal User usuario) {
+                        org.springframework.security.core.Authentication authentication) {
 
-                // Fetch fresh empresa
-                Empresa empresaFresh = null;
-                if (usuario != null && usuario.getEmpresa() != null) {
-                        empresaFresh = empresaRepository.findById(usuario.getEmpresa().getId())
-                                        .orElse(usuario.getEmpresa());
-                }
+                Empresa empresaFresh = resolveEmpresa(authentication);
+                User usuario = resolveUser(authentication, empresaFresh);
 
                 return ResponseEntity.ok(comissaoService.gerarRankingClientes(ano, mes, usuario, empresaFresh));
         }
+
+        private Empresa resolveEmpresa(org.springframework.security.core.Authentication authentication) {
+                Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+                if (tenantId != null) {
+                        return empresaRepository.findById(tenantId).orElse(null);
+                }
+                return null;
+        }
+
+        private User resolveUser(org.springframework.security.core.Authentication authentication, Empresa empresa) {
+                if (authentication != null && authentication
+                                .getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal) {
+                        com.empresa.comissao.security.AuthPrincipal principal = (com.empresa.comissao.security.AuthPrincipal) authentication
+                                        .getPrincipal();
+                        if (principal.getUserId() != null) {
+                                User u = new User();
+                                u.setId(principal.getUserId());
+                                u.setEmpresa(empresa);
+                                return u;
+                        }
+                } else if (authentication != null && authentication.getPrincipal() instanceof User) {
+                        return (User) authentication.getPrincipal();
+                }
+                return null;
+        }
+
 }

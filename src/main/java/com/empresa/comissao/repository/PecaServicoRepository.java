@@ -6,4 +6,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PecaServicoRepository extends JpaRepository<PecaServico, Long> {
+    java.util.Optional<PecaServico> findByLocalIdAndVeiculo_OrdemServico_Empresa(String localId,
+            com.empresa.comissao.domain.entity.Empresa empresa);
 }

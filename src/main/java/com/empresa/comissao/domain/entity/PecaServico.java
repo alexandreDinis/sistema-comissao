@@ -62,6 +62,20 @@ public class PecaServico {
     @Column(name = "data_vencimento_prestador")
     private java.time.LocalDate dataVencimentoPrestador; // Data de vencimento do pagamento ao prestador
 
+    // Offline Sync Idempotency
+    @Column(name = "local_id", nullable = false)
+    private String localId;
+
+    @PrePersist
+    public void prePersist() {
+        if (this.localId == null) {
+            this.localId = java.util.UUID.randomUUID().toString();
+        }
+        if (this.tempId == null) {
+            this.tempId = java.util.UUID.randomUUID();
+        }
+    }
+
     /**
      * Verifica se é serviço terceirizado.
      */

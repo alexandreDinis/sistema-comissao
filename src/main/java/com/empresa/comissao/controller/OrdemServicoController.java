@@ -58,8 +58,50 @@ public class OrdemServicoController {
     @GetMapping
     @Operation(summary = "Listar todas as OS", description = "Suporte a Delta Sync (?since=ISO8601)")
     public ResponseEntity<java.util.List<OrdemServicoResponse>> listarTodas(
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME) java.time.LocalDateTime since) {
-        return ResponseEntity.ok(osService.listarSync(since));
+            @RequestParam(required = false) java.time.Instant since) {
+
+        java.util.List<OrdemServicoResponse> result;
+        long start = System.currentTimeMillis();
+
+        if (since != null) {
+            org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OrdemServicoController.class);
+            log.info("[OS] since(raw)={}", since);
+
+            // Standardized conversion (UTC -> Local + Skew)
+            java.time.LocalDateTime sinceLocal = com.empresa.comissao.util.SyncUtils.normalizeSince(since);
+
+            log.info("[OS] sinceLocal(afterSkew)={}", sinceLocal);
+
+            result = osService.listarSync(sinceLocal);
+        } else {
+            result = osService.listarSync(null);
+        }
+
+        long duration = System.currentTimeMillis() - start;
+        org.slf4j.LoggerFactory.getLogger(OrdemServicoController.class)
+                .info("[SYNC_METRIC] resource={}, items={}, duration={}ms", "ordens-servico", result.size(), duration);
+
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/grid")
+    @Operation(summary = "Listar OS com paginação e filtros (Web)", description = "Endpoint otimizado para grid do frontend")
+    public ResponseEntity<org.springframework.data.domain.Page<OrdemServicoResponse>> listarGrid(
+            org.springframework.data.domain.Pageable pageable,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
+            @RequestParam(required = false) Boolean atrasado) {
+
+        // Ensure default sort if not present
+        if (pageable.getSort().isUnsorted()) {
+            pageable = org.springframework.data.domain.PageRequest.of(
+                    pageable.getPageNumber(),
+                    pageable.getPageSize(),
+                    org.springframework.data.domain.Sort.by("data").descending());
+        }
+
+        return ResponseEntity.ok(osService.listarPaginated(pageable, status, search, date, atrasado));
     }
 
     @PatchMapping("/{id}/status")
@@ -77,6 +119,20 @@ public class OrdemServicoController {
     public ResponseEntity<OrdemServicoResponse> atualizar(@PathVariable Long id,
             @RequestBody @Valid com.empresa.comissao.dto.request.OrdemServicoPatchRequest request) {
         return ResponseEntity.ok(osService.atualizarOS(id, request));
+    }
+
+    @PatchMapping("/veiculos/{id}")
+    @Operation(summary = "Atualizar veículo")
+    public ResponseEntity<OrdemServicoResponse> atualizarVeiculo(@PathVariable Long id,
+            @RequestBody VeiculoRequest request) {
+        return ResponseEntity.ok(osService.atualizarVeiculo(id, request));
+    }
+
+    @PatchMapping("/pecas/{id}")
+    @Operation(summary = "Atualizar peça/serviço")
+    public ResponseEntity<OrdemServicoResponse> atualizarPeca(@PathVariable Long id,
+            @RequestBody PecaServicoRequest request) {
+        return ResponseEntity.ok(osService.atualizarPeca(id, request));
     }
 
     @DeleteMapping("/{id}")

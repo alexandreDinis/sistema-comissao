@@ -146,4 +146,18 @@ public interface ContaPagarRepository extends JpaRepository<ContaPagar, Long> {
                         com.empresa.comissao.domain.enums.TipoContaPagar tipo,
                         LocalDate inicio,
                         LocalDate fim);
+
+        // OTIMIZAÇÃO DASHBOARD: Top 10 contas a pagar vencendo em breve
+        // Projeta diretamente no DTO para evitar carregar entidades pesadas
+        @Query("SELECT new com.empresa.comissao.dto.list.ContaResumoDTO(" +
+                        "c.id, c.descricao, c.valor, c.dataVencimento, c.status, " +
+                        "COALESCE(f.email, 'Diversos')) " +
+                        "FROM ContaPagar c " +
+                        "LEFT JOIN c.funcionario f " +
+                        "WHERE c.empresa = :empresa " +
+                        "AND c.status = com.empresa.comissao.domain.enums.StatusConta.PENDENTE " +
+                        "ORDER BY c.dataVencimento ASC")
+        java.util.List<com.empresa.comissao.dto.list.ContaResumoDTO> findTop10VencendoProximos(
+                        @Param("empresa") com.empresa.comissao.domain.entity.Empresa empresa,
+                        org.springframework.data.domain.Pageable pageable);
 }

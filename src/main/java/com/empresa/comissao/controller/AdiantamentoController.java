@@ -25,8 +25,12 @@ public class AdiantamentoController {
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     public ResponseEntity<PagamentoAdiantado> registrarAdiantamento(
-            @RequestBody AdiantamentoRequest request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User usuarioAutenticado) {
+            @RequestBody AdiantamentoRequest request) {
+
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            throw new BusinessException(" Empresa não encontrada no contexto de segurança.");
+        }
 
         // ✅ OBRIGATÓRIO: Adiantamento deve ser vinculado a um funcionário específico
         if (request.getUsuarioId() == null) {
@@ -38,9 +42,8 @@ public class AdiantamentoController {
                 .orElseThrow(() -> new BusinessException(
                         "Funcionário não encontrado com ID: " + request.getUsuarioId()));
 
-        // Verificar se o funcionário pertence à mesma empresa
-        if (usuarioAutenticado.getEmpresa() != null && targetUser.getEmpresa() != null &&
-                !targetUser.getEmpresa().getId().equals(usuarioAutenticado.getEmpresa().getId())) {
+        // Verificar se o funcionário pertence à empresa do contexto
+        if (targetUser.getEmpresa() == null || !targetUser.getEmpresa().getId().equals(tenantId)) {
             throw new BusinessException("Não é permitido lançar adiantamento para funcionário de outra empresa.");
         }
 
@@ -53,9 +56,15 @@ public class AdiantamentoController {
     }
 
     @GetMapping
-    public ResponseEntity<List<PagamentoAdiantado>> listar(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
-        return ResponseEntity.ok(comissaoService.listarAdiantamentos(usuario != null ? usuario.getEmpresa() : null));
+    public ResponseEntity<List<PagamentoAdiantado>> listar() {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            throw new BusinessException("Empresa não identificada.");
+        }
+        com.empresa.comissao.domain.entity.Empresa empresaProxy = new com.empresa.comissao.domain.entity.Empresa();
+        empresaProxy.setId(tenantId);
+
+        return ResponseEntity.ok(comissaoService.listarAdiantamentos(empresaProxy));
     }
 
 }

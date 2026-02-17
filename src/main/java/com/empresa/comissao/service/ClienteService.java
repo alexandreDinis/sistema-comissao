@@ -10,9 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import com.empresa.comissao.domain.entity.User;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 @Service
 @RequiredArgsConstructor
@@ -21,20 +18,21 @@ public class ClienteService {
     private final ClienteRepository clienteRepository;
 
     @Transactional
-    public ClienteResponse criar(ClienteRequest request, com.empresa.comissao.domain.entity.User usuario) {
-        com.empresa.comissao.domain.enums.TipoPessoa tipo = request.getTipoPessoa() != null
-                ? request.getTipoPessoa()
-                : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
-
-        if (tipo == com.empresa.comissao.domain.enums.TipoPessoa.FISICA) {
-            com.empresa.comissao.validation.ValidadorDocumento.validarCpf(request.getCpf());
-        } else {
-            com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
+    public ClienteResponse criar(ClienteRequest request) {
+        // Idempotency Check (Correlation ID)
+        if (request.getCorrelationId() != null && !request.getCorrelationId().isBlank()) {
+            java.util.Optional<Cliente> existing = clienteRepository.findByCorrelationId(request.getCorrelationId());
+            if (existing.isPresent()) {
+                // Return existing to preventing duplicates
+                return mapToResponse(existing.get());
+            }
         }
+
+        validarDocumentos(request);
 
         Cliente cliente = new Cliente();
         updateEntity(cliente, request);
-        cliente.setEmpresa(usuario.getEmpresa());
+        cliente.setEmpresa(getEmpresaAutenticada());
         cliente = clienteRepository.save(cliente);
         return mapToResponse(cliente);
     }
@@ -45,16 +43,7 @@ public class ClienteService {
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Cliente não encontrado"));
 
         validarAcesso(cliente);
-
-        com.empresa.comissao.domain.enums.TipoPessoa tipo = request.getTipoPessoa() != null
-                ? request.getTipoPessoa()
-                : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
-
-        if (tipo == com.empresa.comissao.domain.enums.TipoPessoa.FISICA) {
-            com.empresa.comissao.validation.ValidadorDocumento.validarCpf(request.getCpf());
-        } else {
-            com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
-        }
+        validarDocumentos(request);
 
         updateEntity(cliente, request);
         cliente = clienteRepository.save(cliente);
@@ -67,7 +56,15 @@ public class ClienteService {
 
         validarAcesso(cliente);
 
-        clienteRepository.delete(cliente);
+        if (cliente.getDeletedAt() != null) {
+            return; // Idempotent
+        }
+
+        cliente.setDeletedAt(java.time.LocalDateTime.now());
+        cliente.setUpdatedAt(java.time.LocalDateTime.now());
+        cliente.setStatus(com.empresa.comissao.domain.enums.StatusCliente.INATIVO);
+
+        clienteRepository.save(cliente);
     }
 
     public ClienteResponse buscarPorId(Long id) {
@@ -82,12 +79,13 @@ public class ClienteService {
         org.springframework.data.jpa.domain.Specification<Cliente> spec = com.empresa.comissao.repository.specification.ClienteSpecification
                 .comFiltros(termo, cidade, bairro, status);
 
-        User currentUser = getCurrentUser();
-        if (currentUser != null && currentUser.getEmpresa() != null) {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            com.empresa.comissao.domain.entity.Empresa empresaRef = new com.empresa.comissao.domain.entity.Empresa();
+            empresaRef.setId(tenantId);
             spec = spec.and(com.empresa.comissao.repository.specification.ClienteSpecification
-                    .porEmpresa(currentUser.getEmpresa()));
+                    .porEmpresa(empresaRef));
         } else {
-            // If no tenant context, return empty list to prevent leak
             return java.util.Collections.emptyList();
         }
 
@@ -98,26 +96,30 @@ public class ClienteService {
 
     // Deprecated or redirect
     public List<ClienteResponse> listarTodos() {
-        return listar(null, null, null, null);
+        // Listar sem filtros, apenas não deletados do tenant
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null)
+            return java.util.Collections.emptyList();
+
+        return clienteRepository.findByEmpresaIdAndDeletedAtIsNull(tenantId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
     }
 
     public List<ClienteResponse> listarSync(java.time.LocalDateTime since) {
-        List<Cliente> clientes;
-        if (since != null) {
-            clientes = clienteRepository.findSyncData(since);
-        } else {
-            // Se since for nulo, retorna todos (padrão antigo ou sync inicial)
-            // CUIDADO: Em produção real, deve-se paginar. Para MVP/Mobile, ok.
-            clientes = clienteRepository.findAll();
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            return java.util.Collections.emptyList();
         }
 
-        // Ensure tenant scope valid
-        User user = getCurrentUser();
-        if (user != null && user.getEmpresa() != null) {
-            final Long empresaId = user.getEmpresa().getId();
-            clientes = clientes.stream()
-                    .filter(c -> c.getEmpresa() != null && c.getEmpresa().getId().equals(empresaId))
-                    .collect(Collectors.toList());
+        List<Cliente> clientes;
+        if (since != null) {
+            // Sync traz tudo que mudou, inclusive deletados (para o app remover via
+            // localId/ID)
+            clientes = clienteRepository.findSyncData(since, tenantId);
+        } else {
+            // Full Sync inicial: não traz deletados
+            clientes = clienteRepository.findByEmpresaIdAndDeletedAtIsNull(tenantId);
         }
 
         return clientes.stream()
@@ -128,8 +130,8 @@ public class ClienteService {
     private void updateEntity(Cliente c, ClienteRequest r) {
         c.setRazaoSocial(r.getRazaoSocial());
         c.setNomeFantasia(r.getNomeFantasia());
-        c.setCnpj(r.getCnpj());
-        c.setCpf(r.getCpf());
+        c.setCnpj(r.getCnpj() != null && !r.getCnpj().isBlank() ? r.getCnpj() : null);
+        c.setCpf(r.getCpf() != null && !r.getCpf().isBlank() ? r.getCpf() : null);
         c.setTipoPessoa(
                 r.getTipoPessoa() != null ? r.getTipoPessoa() : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA);
         c.setEmail(r.getEmail());
@@ -147,13 +149,15 @@ public class ClienteService {
 
         if (r.getEndereco() != null)
             c.setEndereco(r.getEndereco());
+
+        if (r.getCorrelationId() != null)
+            c.setCorrelationId(r.getCorrelationId());
     }
 
     private ClienteResponse mapToResponse(Cliente c) {
         return ClienteResponse.builder()
                 .id(c.getId())
                 .razaoSocial(c.getRazaoSocial())
-                .nomeFantasia(c.getNomeFantasia())
                 .nomeFantasia(c.getNomeFantasia())
                 .cnpj(c.getCnpj())
                 .cpf(c.getCpf())
@@ -169,23 +173,45 @@ public class ClienteService {
                 .estado(c.getEstado())
                 .cep(c.getCep())
                 .localId(c.getLocalId())
-                .deletedAt(c.getDeletedAt())
-                .updatedAt(c.getUpdatedAt())
+                .correlationId(c.getCorrelationId())
+                .deletedAt(
+                        c.getDeletedAt() != null ? c.getDeletedAt().atZone(java.time.ZoneId.systemDefault()).toInstant()
+                                : null)
+                .updatedAt(
+                        c.getUpdatedAt() != null ? c.getUpdatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant()
+                                : null)
                 .build();
     }
 
-    private User getCurrentUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof User) {
-            return (User) auth.getPrincipal();
+    private void validarDocumentos(ClienteRequest request) {
+        com.empresa.comissao.domain.enums.TipoPessoa tipo = request.getTipoPessoa() != null
+                ? request.getTipoPessoa()
+                : com.empresa.comissao.domain.enums.TipoPessoa.JURIDICA;
+
+        if (tipo == com.empresa.comissao.domain.enums.TipoPessoa.FISICA) {
+            if (request.getCpf() != null && !request.getCpf().isBlank()) {
+                com.empresa.comissao.validation.ValidadorDocumento.validarCpf(request.getCpf());
+            }
+        } else {
+            if (request.getCnpj() != null && !request.getCnpj().isBlank()) {
+                com.empresa.comissao.validation.ValidadorDocumento.validarCnpj(request.getCnpj());
+            }
         }
-        return null;
+    }
+
+    private com.empresa.comissao.domain.entity.Empresa getEmpresaAutenticada() {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            return com.empresa.comissao.domain.entity.Empresa.builder().id(tenantId).build();
+        }
+        throw new jakarta.persistence.EntityNotFoundException(
+                "Usuário não vinculado a uma empresa (TenantContext vazio)");
     }
 
     private void validarAcesso(Cliente cliente) {
-        User user = getCurrentUser();
-        if (user != null && user.getEmpresa() != null) {
-            if (cliente.getEmpresa() == null || !cliente.getEmpresa().getId().equals(user.getEmpresa().getId())) {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            if (cliente.getEmpresa() == null || !cliente.getEmpresa().getId().equals(tenantId)) {
                 throw new jakarta.persistence.EntityNotFoundException("Cliente não encontrado");
             }
         }

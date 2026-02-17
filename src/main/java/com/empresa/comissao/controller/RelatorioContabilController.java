@@ -1,7 +1,6 @@
 package com.empresa.comissao.controller;
 
 import com.empresa.comissao.domain.entity.Empresa;
-import com.empresa.comissao.domain.entity.User;
 import com.empresa.comissao.dto.*;
 import com.empresa.comissao.repository.EmpresaRepository;
 import com.empresa.comissao.service.FinanceiroService;
@@ -14,7 +13,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.YearMonth;
@@ -35,11 +33,10 @@ public class RelatorioContabilController {
     @Operation(summary = "Exportar Relatório de Receita por Caixa (Base DAS)")
     public ResponseEntity<byte[]> gerarRelatorioReceitaCaixa(
             @RequestParam int ano,
-            @RequestParam int mes,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam int mes) {
 
         log.info("📄 Solicitado Relatório de Receita por Caixa: {}/{}", mes, ano);
-        Empresa empresa = getEmpresaFresh(usuario);
+        Empresa empresa = getEmpresaFromContext();
         YearMonth periodo = YearMonth.of(ano, mes);
 
         RelatorioReceitaCaixaDTO relatorio = financeiroService.getRelatorioReceitaCaixaDetalhada(empresa, periodo);
@@ -53,11 +50,10 @@ public class RelatorioContabilController {
     @Operation(summary = "Exportar Fluxo de Caixa Mensal Detalhado")
     public ResponseEntity<byte[]> gerarRelatorioFluxoCaixa(
             @RequestParam int ano,
-            @RequestParam int mes,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam int mes) {
 
         log.info("📄 Solicitado Fluxo de Caixa Detalhado: {}/{}", mes, ano);
-        Empresa empresa = getEmpresaFresh(usuario);
+        Empresa empresa = getEmpresaFromContext();
         YearMonth periodo = YearMonth.of(ano, mes);
 
         RelatorioFluxoCaixaDTO relatorio = financeiroService.getRelatorioFluxoCaixaMensal(empresa, periodo);
@@ -71,11 +67,10 @@ public class RelatorioContabilController {
     @Operation(summary = "Exportar Relatório de Contas a Pagar")
     public ResponseEntity<byte[]> gerarRelatorioContasPagar(
             @RequestParam int ano,
-            @RequestParam int mes,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam int mes) {
 
         log.info("📄 Solicitado Relatório Contas a Pagar: {}/{}", mes, ano);
-        Empresa empresa = getEmpresaFresh(usuario);
+        Empresa empresa = getEmpresaFromContext();
         YearMonth periodo = YearMonth.of(ano, mes);
 
         RelatorioContasPagarDTO relatorio = financeiroService.getRelatorioContasPagar(empresa, periodo);
@@ -89,11 +84,10 @@ public class RelatorioContabilController {
     @Operation(summary = "Exportar Demonstrativo de Distribuição de Lucros")
     public ResponseEntity<byte[]> gerarRelatorioDistribuicaoLucros(
             @RequestParam int ano,
-            @RequestParam int mes,
-            @AuthenticationPrincipal User usuario) {
+            @RequestParam int mes) {
 
         log.info("📄 Solicitado Relatório Distribuição Lucros: {}/{}", mes, ano);
-        Empresa empresa = getEmpresaFresh(usuario);
+        Empresa empresa = getEmpresaFromContext();
         YearMonth periodo = YearMonth.of(ano, mes);
 
         RelatorioDistribuicaoLucrosDTO relatorio = financeiroService.getRelatorioDistribuicaoLucros(empresa, periodo);
@@ -102,10 +96,10 @@ public class RelatorioContabilController {
         return gerarResponsePdf(pdfBytes, "distribuicao-lucros-" + ano + "-" + mes + ".pdf");
     }
 
-    private Empresa getEmpresaFresh(User usuario) {
-        if (usuario != null && usuario.getEmpresa() != null) {
-            return empresaRepository.findById(usuario.getEmpresa().getId())
-                    .orElse(usuario.getEmpresa());
+    private Empresa getEmpresaFromContext() {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            return empresaRepository.findById(tenantId).orElse(null);
         }
         return null;
     }

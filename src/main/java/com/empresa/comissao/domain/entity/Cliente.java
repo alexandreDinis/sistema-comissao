@@ -10,7 +10,8 @@ import lombok.Builder;
 @Entity
 @Table(name = "clientes", uniqueConstraints = {
         @UniqueConstraint(columnNames = { "cnpj", "empresa_id" }),
-        @UniqueConstraint(columnNames = { "cpf", "empresa_id" })
+        @UniqueConstraint(columnNames = { "cpf", "empresa_id" }),
+        @UniqueConstraint(columnNames = { "empresa_id", "local_id" })
 })
 @Data
 @NoArgsConstructor
@@ -22,7 +23,6 @@ public class Cliente {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
     private String razaoSocial;
 
     private String nomeFantasia;
@@ -59,13 +59,15 @@ public class Cliente {
     @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa;
 
-    @Column(name = "local_id", nullable = false, unique = true)
+    @Column(name = "local_id", nullable = false)
     private String localId;
+
+    @Column(name = "correlation_id")
+    private String correlationId;
 
     @Column(name = "deleted_at")
     private java.time.LocalDateTime deletedAt;
 
-    @org.hibernate.annotations.UpdateTimestamp
     @Column(name = "updated_at")
     private java.time.LocalDateTime updatedAt;
 
@@ -74,5 +76,11 @@ public class Cliente {
         if (this.localId == null) {
             this.localId = java.util.UUID.randomUUID().toString();
         }
+        this.updatedAt = java.time.LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = java.time.LocalDateTime.now();
     }
 }

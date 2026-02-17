@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 @Builder
 public class PecaServicoResponse {
     private Long id;
+    private String localId;
+    private Long tipoPecaId;
     private String nomePeca; // Nome do TipoPeca
     private BigDecimal valorCobrado;
     private String descricao;

@@ -16,18 +16,28 @@ public class TipoPecaService {
     private final TipoPecaRepository tipoPecaRepository;
 
     @Transactional
-    public TipoPeca criar(TipoPecaRequest request, com.empresa.comissao.domain.entity.User usuario) {
+    public TipoPeca criar(TipoPecaRequest request) {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            throw new com.empresa.comissao.exception.BusinessException("Tenant ID não encontrado");
+        }
+        com.empresa.comissao.domain.entity.Empresa empresa = new com.empresa.comissao.domain.entity.Empresa();
+        empresa.setId(tenantId);
+
         TipoPeca tipoPeca = TipoPeca.builder()
                 .nome(request.getNome())
                 .valorPadrao(request.getValorPadrao())
-                .empresa(usuario.getEmpresa())
+                .empresa(empresa)
                 .build();
         return tipoPecaRepository.save(tipoPeca);
     }
 
-    public List<TipoPeca> listarTodos(com.empresa.comissao.domain.entity.User usuario) {
-        if (usuario != null && usuario.getEmpresa() != null) {
-            return tipoPecaRepository.findByEmpresa(usuario.getEmpresa());
+    public List<TipoPeca> listarTodos() {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            com.empresa.comissao.domain.entity.Empresa empresa = new com.empresa.comissao.domain.entity.Empresa();
+            empresa.setId(tenantId);
+            return tipoPecaRepository.findByEmpresa(empresa);
         }
         return java.util.Collections.emptyList();
     }
