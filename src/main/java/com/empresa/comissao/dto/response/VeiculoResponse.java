@@ -9,6 +9,7 @@ import java.util.List;
 @Builder
 public class VeiculoResponse {
     private Long id;
+    private String localId;
     private String placa;
     private String modelo;
     private String cor;

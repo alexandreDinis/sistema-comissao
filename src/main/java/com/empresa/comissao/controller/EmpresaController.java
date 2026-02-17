@@ -1,7 +1,6 @@
 package com.empresa.comissao.controller;
 
 import com.empresa.comissao.domain.entity.Empresa;
-import com.empresa.comissao.domain.entity.User;
 import com.empresa.comissao.domain.enums.ModoComissao;
 import com.empresa.comissao.repository.EmpresaRepository;
 import com.empresa.comissao.service.StorageService;
@@ -12,7 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -32,12 +30,11 @@ public class EmpresaController {
      */
     @GetMapping("/config")
     @PreAuthorize("hasRole('ADMIN_EMPRESA')")
-    public ResponseEntity<EmpresaConfigResponse> getConfig(@AuthenticationPrincipal User user) {
-        if (user.getEmpresa() == null) {
+    public ResponseEntity<EmpresaConfigResponse> getConfig() {
+        Empresa empresa = resolveEmpresa();
+        if (empresa == null) {
             return ResponseEntity.badRequest().build();
         }
-
-        Empresa empresa = user.getEmpresa();
         return ResponseEntity.ok(buildConfigResponse(empresa));
     }
 
@@ -61,14 +58,14 @@ public class EmpresaController {
     @PatchMapping("/config")
     @PreAuthorize("hasRole('ADMIN_EMPRESA')")
     public ResponseEntity<EmpresaConfigResponse> updateConfig(
-            @AuthenticationPrincipal User user,
             @RequestBody UpdateEmpresaConfigRequest request) {
 
-        if (user.getEmpresa() == null) {
+        final Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId == null) {
             return ResponseEntity.badRequest().build();
         }
 
-        Empresa empresa = empresaRepository.findById(user.getEmpresa().getId())
+        Empresa empresa = empresaRepository.findById(tenantId)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
         if (request.getModoComissao() != null) {
@@ -103,11 +100,11 @@ public class EmpresaController {
     @PreAuthorize("hasRole('ADMIN_EMPRESA')")
     public ResponseEntity<?> uploadLogo(
             @PathVariable Long id,
-            @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal User user) {
+            @RequestParam("file") MultipartFile file) {
 
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
         // Security check: Ensure admin can only update their own company
-        if (user.getEmpresa() == null || !user.getEmpresa().getId().equals(id)) {
+        if (tenantId == null || !tenantId.equals(id)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Você só pode atualizar o logo da sua própria empresa."));
         }
@@ -146,6 +143,14 @@ public class EmpresaController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Erro ao fazer upload: " + e.getMessage()));
         }
+    }
+
+    private Empresa resolveEmpresa() {
+        Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+        if (tenantId != null) {
+            return empresaRepository.findById(tenantId).orElse(null);
+        }
+        return null;
     }
 
     /**

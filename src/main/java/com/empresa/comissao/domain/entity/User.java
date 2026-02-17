@@ -11,6 +11,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -39,7 +40,7 @@ public class User implements UserDetails {
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
     private Empresa empresa; // Nullable for SUPER_ADMIN (Platform Level)
 
-    @ManyToMany(fetch = FetchType.EAGER, cascade = { CascadeType.MERGE, CascadeType.PERSIST })
+    @ManyToMany(fetch = FetchType.LAZY, cascade = { CascadeType.MERGE, CascadeType.PERSIST })
     @JoinTable(name = "user_features", joinColumns = @JoinColumn(name = "usuario_id"), inverseJoinColumns = @JoinColumn(name = "feature_id"))
     private java.util.Set<Feature> features;
 
@@ -55,6 +56,19 @@ public class User implements UserDetails {
     @Builder.Default
     @Column(name = "participa_comissao")
     private boolean participaComissao = true;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Integer authVersion = 0;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    @PreUpdate
+    public void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

@@ -10,6 +10,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,6 +33,37 @@ public class OrdemServicoService {
         private final FinanceiroService financeiroService;
         private final UserRepository userRepository;
         private final ContaReceberRepository contaReceberRepository;
+
+        @Autowired
+        private TenantVersionService tenantVersionService;
+
+        // ... existing fields ...
+
+        private void bumpTenantVersion(OrdemServico os) {
+                if (os != null && os.getEmpresa() != null) {
+                        tenantVersionService.bump(os.getEmpresa().getId());
+                }
+        }
+
+        /**
+         * 🔐 Security: Valida se o usuário pode ser atribuído a uma OS deste tenant.
+         * Deve pertencer à mesma empresa e ter role FUNCIONARIO ou ADMIN_EMPRESA.
+         */
+        private void validarAtribuicaoUsuario(User user, Empresa empresa) {
+                if (user == null)
+                        return;
+
+                if (user.getEmpresa() == null || !user.getEmpresa().getId().equals(empresa.getId())) {
+                        throw new IllegalArgumentException("O usuário selecionado não pertence a esta empresa.");
+                }
+
+                com.empresa.comissao.domain.enums.Role role = user.getRole();
+                if (role != com.empresa.comissao.domain.enums.Role.ADMIN_EMPRESA
+                                && role != com.empresa.comissao.domain.enums.Role.FUNCIONARIO) {
+                        throw new IllegalArgumentException(
+                                        "O usuário selecionado não tem permissão para ser um responsável técnico (Role inválida).");
+                }
+        }
 
         @Transactional
         public OrdemServicoResponse atualizarStatus(Long id,
@@ -73,6 +105,8 @@ public class OrdemServicoService {
 
                         faturamentoRepository.save(faturamento);
                         log.info("✅ Faturamento gerado com sucesso para OS ID: {} (data: {})", id, dataReferencia);
+
+                        bumpTenantVersion(os);
 
                         // Criar Conta a Receber automaticamente como PENDENTE
                         // Cliente precisa pagar para comissão ser computada
@@ -202,6 +236,8 @@ public class OrdemServicoService {
                                                 .orElseThrow(() -> new EntityNotFoundException(
                                                                 "Usuário não encontrado"));
 
+                                validarAtribuicaoUsuario(newUser, os.getEmpresa());
+
                                 os.setUsuario(newUser);
 
                                 // Propagate to Faturamento and ContaReceber if they exist
@@ -224,6 +260,7 @@ public class OrdemServicoService {
                 }
 
                 os = osRepository.save(os);
+                bumpTenantVersion(os);
                 return mapToResponse(os);
         }
 
@@ -240,23 +277,30 @@ public class OrdemServicoService {
 
                 os.setStatus(com.empresa.comissao.domain.enums.StatusOrdemServico.CANCELADA);
                 osRepository.save(os);
+                bumpTenantVersion(os);
         }
 
         @Transactional
         public OrdemServicoResponse criarOS(OrdemServicoRequest request) {
+                com.empresa.comissao.domain.entity.Empresa empresa = getEmpresaAutenticada();
+
+                // 🔄 Upsert / Idempotency based on localId
+                if (request.getLocalId() != null) {
+                        java.util.Optional<OrdemServico> existing = osRepository.findByLocalIdAndEmpresa(
+                                        request.getLocalId(),
+                                        empresa);
+                        if (existing.isPresent()) {
+                                log.info("🔄 Upsert OS (LocalID: {}): Atualizando existente ID {}",
+                                                request.getLocalId(),
+                                                existing.get().getId());
+                                return atualizarOSExistente(existing.get(), request);
+                        }
+                }
+
                 Cliente cliente = clienteRepository.findById(request.getClienteId())
                                 .orElseThrow(() -> new EntityNotFoundException("Cliente não encontrado"));
 
-                org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
-                                .getContext().getAuthentication();
-                com.empresa.comissao.domain.entity.User usuario = null;
-                com.empresa.comissao.domain.entity.Empresa empresa = null;
-
-                if (authentication != null
-                                && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
-                        usuario = (com.empresa.comissao.domain.entity.User) authentication.getPrincipal();
-                        empresa = usuario.getEmpresa();
-                }
+                com.empresa.comissao.domain.entity.User usuario = getUserAutenticado();
 
                 // Validate discount
                 if (request.getTipoDesconto() != null && request.getValorDesconto() != null) {
@@ -273,6 +317,7 @@ public class OrdemServicoService {
                                                 : request.getData())
                                 .valorTotal(BigDecimal.ZERO)
                                 .empresa(empresa)
+                                .localId(request.getLocalId()) // Set localId from request
                                 .build();
 
                 // Allow overriding user if provided (e.g. Admin creating for Salesperson)
@@ -281,6 +326,50 @@ public class OrdemServicoService {
                                         .findById(request.getUsuarioId())
                                         .orElseThrow(() -> new EntityNotFoundException(
                                                         "Usuário indicado não encontrado"));
+
+                        validarAtribuicaoUsuario(targetUser, empresa);
+
+                        os.setUsuario(targetUser);
+                } else if (usuario != null) {
+                        os.setUsuario(usuario);
+                }
+
+                os = osRepository.save(os);
+                bumpTenantVersion(os);
+                return mapToResponse(os);
+        }
+
+        private OrdemServicoResponse atualizarOSExistente(OrdemServico os, OrdemServicoRequest request) {
+                // Update basic fields
+                os.setData(request.getData());
+                if (request.getDataVencimento() != null) {
+                        os.setDataVencimento(request.getDataVencimento());
+                }
+
+                // Update Discount
+                boolean recalcular = false;
+                if (request.getTipoDesconto() != null) {
+                        os.setTipoDesconto(request.getTipoDesconto());
+                        recalcular = true;
+                }
+                if (request.getValorDesconto() != null) {
+                        os.setValorDesconto(request.getValorDesconto());
+                        recalcular = true;
+                }
+
+                if (recalcular) {
+                        os.recalcularTotal();
+                }
+
+                // Update User if needed
+                if (request.getUsuarioId() != null) {
+                        com.empresa.comissao.domain.entity.User targetUser = userRepository
+                                        .findById(request.getUsuarioId())
+                                        .orElseThrow(() -> new EntityNotFoundException(
+                                                        "Usuário indicado não encontrado"));
+
+                        validarAtribuicaoUsuario(targetUser, os.getEmpresa());
+
                         os.setUsuario(targetUser);
                 }
 
@@ -290,14 +379,55 @@ public class OrdemServicoService {
 
         @Transactional
         public OrdemServicoResponse adicionarVeiculo(VeiculoRequest request) {
-                OrdemServico os = osRepository.findById(request.getOrdemServicoId())
-                                .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+                com.empresa.comissao.domain.entity.Empresa empresa = getEmpresaAutenticada();
+                OrdemServico os;
 
-                validarAcesso(os);
+                // 1. Resolve OS (ID or LocalID)
+                if (request.getOrdemServicoId() != null) {
+                        os = osRepository.findById(request.getOrdemServicoId())
+                                        .orElseThrow(() -> new EntityNotFoundException("OS não encontrada"));
+                        if (os.getEmpresa() == null || !os.getEmpresa().getId().equals(empresa.getId())) {
+                                throw new EntityNotFoundException("OS não encontrada");
+                        }
+                } else if (request.getOrdemServicoLocalId() != null) {
+                        os = osRepository.findByLocalIdAndEmpresa(request.getOrdemServicoLocalId(), empresa)
+                                        .orElseThrow(() -> new com.empresa.comissao.exception.DependencyNotFoundException(
+                                                        "OS não encontrada para localId="
+                                                                        + request.getOrdemServicoLocalId(),
+                                                        "OS"));
+                } else {
+                        throw new IllegalArgumentException("ID ou LocalID da OS é obrigatório");
+                }
 
                 // Validar e Normalizar placa
                 String placaNormalizada = com.empresa.comissao.validation.ValidadorPlaca.normalizar(request.getPlaca());
                 com.empresa.comissao.validation.ValidadorPlaca.validar(placaNormalizada);
+
+                // 2. Upsert Veiculo check (Explicit Scope: Company derived from OS)
+                if (request.getLocalId() != null) {
+                        java.util.Optional<VeiculoServico> existing = veiculoRepository
+                                        .findByLocalIdAndOrdemServico_Empresa(request.getLocalId(), empresa);
+                        if (existing.isPresent()) {
+                                VeiculoServico v = existing.get();
+                                log.info("🔄 Upsert Veículo (LocalID: {}): Atualizando existente ID {}",
+                                                request.getLocalId(), v.getId());
+                                v.setPlaca(placaNormalizada);
+                                v.setModelo(request.getModelo());
+                                v.setCor(request.getCor());
+
+                                // Ensure strict parent consistency (optional but good for data integrity)
+                                if (!v.getOrdemServico().getId().equals(os.getId())) {
+                                        log.warn("⚠️ Veículo movido de OS ID {} para OS ID {}",
+                                                        v.getOrdemServico().getId(), os.getId());
+                                        // In a pure sync scenario, reparenting might happen?
+                                        // For now, let's assume it stays in same OS or just update ref
+                                        v.setOrdemServico(os);
+                                }
+
+                                veiculoRepository.save(v);
+                                return mapToResponse(v.getOrdemServico());
+                        }
+                }
 
                 VeiculoServico veiculo = VeiculoServico.builder()
                                 .ordemServico(os)
@@ -305,19 +435,38 @@ public class OrdemServicoService {
                                 .modelo(request.getModelo())
                                 .cor(request.getCor())
                                 .valorTotal(BigDecimal.ZERO)
+                                .localId(request.getLocalId()) // Set localId
                                 .build();
 
                 os.getVeiculos().add(veiculo);
                 os = osRepository.save(os);
+                bumpTenantVersion(os);
                 return mapToResponse(os);
         }
 
         @Transactional
         public OrdemServicoResponse adicionarPeca(PecaServicoRequest request) {
-                VeiculoServico veiculo = veiculoRepository.findById(request.getVeiculoId())
-                                .orElseThrow(() -> new EntityNotFoundException("Veículo não encontrado"));
+                com.empresa.comissao.domain.entity.Empresa empresa = getEmpresaAutenticada();
+                VeiculoServico veiculo;
 
-                validarAcesso(veiculo.getOrdemServico());
+                // 1. Resolve Veiculo (ID or LocalID)
+                if (request.getVeiculoId() != null) {
+                        veiculo = veiculoRepository.findById(request.getVeiculoId())
+                                        .orElseThrow(() -> new EntityNotFoundException("Veículo não encontrado"));
+                        if (veiculo.getOrdemServico().getEmpresa() == null
+                                        || !veiculo.getOrdemServico().getEmpresa().getId().equals(empresa.getId())) {
+                                throw new EntityNotFoundException("Veículo não encontrado");
+                        }
+                } else if (request.getVeiculoLocalId() != null) {
+                        veiculo = veiculoRepository
+                                        .findByLocalIdAndOrdemServico_Empresa(request.getVeiculoLocalId(), empresa)
+                                        .orElseThrow(() -> new com.empresa.comissao.exception.DependencyNotFoundException(
+                                                        "Veículo não encontrado para localId="
+                                                                        + request.getVeiculoLocalId(),
+                                                        "VEICULO"));
+                } else {
+                        throw new IllegalArgumentException("ID ou LocalID do Veículo é obrigatório");
+                }
 
                 TipoPeca tipoPeca = tipoPecaRepository.findById(request.getTipoPecaId())
                                 .orElseThrow(() -> new EntityNotFoundException("Peça não encontrada no catálogo"));
@@ -359,6 +508,34 @@ public class OrdemServicoService {
                                         prestador.getNome());
                 }
 
+                // 2. Upsert Peca check
+                if (request.getLocalId() != null) {
+                        java.util.Optional<PecaServico> existing = pecaRepository
+                                        .findByLocalIdAndVeiculo_OrdemServico_Empresa(request.getLocalId(), empresa);
+                        if (existing.isPresent()) {
+                                PecaServico p = existing.get();
+                                log.info("🔄 Upsert Peça (LocalID: {}): Atualizando existente ID {}",
+                                                request.getLocalId(), p.getId());
+
+                                // Update fields
+                                p.setTipoPeca(tipoPeca);
+                                p.setValor(valorFinal);
+                                p.setDescricao(request.getDescricao());
+                                p.setTipoExecucao(tipoExecucao);
+                                p.setPrestador(prestador);
+                                p.setCustoPrestador(request.getCustoPrestador());
+                                p.setDataVencimentoPrestador(request.getDataVencimentoPrestador());
+
+                                pecaRepository.save(p);
+
+                                // Recalculate Totals
+                                p.getVeiculo().recalcularTotal();
+                                osRepository.save(p.getVeiculo().getOrdemServico());
+
+                                return mapToResponse(p.getVeiculo().getOrdemServico());
+                        }
+                }
+
                 PecaServico peca = PecaServico.builder()
                                 .veiculo(veiculo)
                                 .tipoPeca(tipoPeca)
@@ -368,6 +545,7 @@ public class OrdemServicoService {
                                 .prestador(prestador)
                                 .custoPrestador(request.getCustoPrestador())
                                 .dataVencimentoPrestador(request.getDataVencimentoPrestador())
+                                .localId(request.getLocalId()) // Set localId
                                 .build();
 
                 // Add to vehicle list
@@ -384,6 +562,8 @@ public class OrdemServicoService {
                 // Saving Veiculo updates the child side.
                 // To be safe and ensure OS total is persisted:
                 osRepository.save(veiculo.getOrdemServico());
+
+                bumpTenantVersion(veiculo.getOrdemServico());
 
                 return mapToResponse(veiculo.getOrdemServico());
         }
@@ -412,8 +592,91 @@ public class OrdemServicoService {
                 // Recalcular totais
                 veiculo.recalcularTotal();
                 osRepository.save(os);
+                bumpTenantVersion(os);
 
                 log.info("🗑️ Peça ID {} removida da OS ID {}", pecaId, os.getId());
+
+                return mapToResponse(os);
+        }
+
+        @Transactional
+        public OrdemServicoResponse atualizarVeiculo(Long id, VeiculoRequest request) {
+                VeiculoServico veiculo = veiculoRepository.findById(id)
+                                .orElseThrow(() -> new EntityNotFoundException("Veículo não encontrado"));
+
+                OrdemServico os = veiculo.getOrdemServico();
+                validarAcesso(os);
+
+                // Normalizar e validar placa
+                if (request.getPlaca() != null) {
+                        String placaNormalizada = com.empresa.comissao.validation.ValidadorPlaca
+                                        .normalizar(request.getPlaca());
+                        com.empresa.comissao.validation.ValidadorPlaca.validar(placaNormalizada);
+                        veiculo.setPlaca(placaNormalizada);
+                }
+                if (request.getModelo() != null) {
+                        veiculo.setModelo(request.getModelo());
+                }
+                if (request.getCor() != null) {
+                        veiculo.setCor(request.getCor());
+                }
+
+                veiculoRepository.save(veiculo);
+                bumpTenantVersion(os);
+                return mapToResponse(os);
+        }
+
+        @Transactional
+        public OrdemServicoResponse atualizarPeca(Long id, PecaServicoRequest request) {
+                PecaServico peca = pecaRepository.findById(id)
+                                .orElseThrow(() -> new EntityNotFoundException("Peça/Serviço não encontrado"));
+
+                VeiculoServico veiculo = peca.getVeiculo();
+                OrdemServico os = veiculo.getOrdemServico();
+                validarAcesso(os);
+
+                // Atualizar tipo de peça se informado
+                if (request.getTipoPecaId() != null) {
+                        TipoPeca tipoPeca = tipoPecaRepository.findById(request.getTipoPecaId())
+                                        .orElseThrow(() -> new EntityNotFoundException(
+                                                        "Peça não encontrada no catálogo"));
+                        peca.setTipoPeca(tipoPeca);
+                }
+
+                // Atualizar valor
+                if (request.getValorCobrado() != null) {
+                        peca.setValor(request.getValorCobrado());
+                }
+
+                // Atualizar descrição
+                if (request.getDescricao() != null) {
+                        peca.setDescricao(request.getDescricao());
+                }
+
+                // Atualizar tipo de execução
+                if (request.getTipoExecucao() != null) {
+                        peca.setTipoExecucao(request.getTipoExecucao());
+                }
+
+                // Atualizar prestador
+                if (request.getPrestadorId() != null) {
+                        Prestador prestador = prestadorRepository.findById(request.getPrestadorId())
+                                        .orElseThrow(() -> new EntityNotFoundException("Prestador não encontrado"));
+                        peca.setPrestador(prestador);
+                }
+                if (request.getCustoPrestador() != null) {
+                        peca.setCustoPrestador(request.getCustoPrestador());
+                }
+                if (request.getDataVencimentoPrestador() != null) {
+                        peca.setDataVencimentoPrestador(request.getDataVencimentoPrestador());
+                }
+
+                pecaRepository.save(peca);
+
+                // Recalcular totais
+                veiculo.recalcularTotal();
+                osRepository.save(os);
+                bumpTenantVersion(os);
 
                 return mapToResponse(os);
         }
@@ -437,28 +700,98 @@ public class OrdemServicoService {
         }
 
         public java.util.List<OrdemServicoResponse> listarSync(java.time.LocalDateTime since) {
-                // Get current user's empresa for tenant filtering
-                org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
+                Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+
+                if (tenantId != null) {
+                        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+                                        .getContext().getAuthentication();
+
+                        // Determine if user is Admin
+                        boolean isAdmin = auth.getAuthorities().stream()
+                                        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN_EMPRESA") ||
+                                                        a.getAuthority().equals("ROLE_SUPER_ADMIN") ||
+                                                        a.getAuthority().equals("ROLE_ADMIN_LICENCA"));
+
+                        Long userId = null;
+                        if (!isAdmin) {
+                                if (auth.getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal) {
+                                        userId = ((com.empresa.comissao.security.AuthPrincipal) auth.getPrincipal())
+                                                        .getUserId();
+                                } else if (auth.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
+                                        userId = ((com.empresa.comissao.domain.entity.User) auth.getPrincipal())
+                                                        .getId();
+                                }
+                        }
+
+                        List<OrdemServico> list;
+                        if (isAdmin) {
+                                // ADMIN: vê tudo do tenant
+                                if (since != null) {
+                                        list = osRepository.findSyncData(tenantId, since);
+                                } else {
+                                        list = osRepository.findAllFullSync(tenantId);
+                                }
+                        } else {
+                                // TECNICO/OUTROS: vê apenas suas OS
+                                if (userId == null) {
+                                        // Should not happen for authenticated non-admin users, but safe fallback
+                                        return java.util.Collections.emptyList();
+                                }
+                                if (since != null) {
+                                        list = osRepository.findSyncDataByUsuario(tenantId, since, userId);
+                                } else {
+                                        list = osRepository.findAllFullSyncByUsuario(tenantId, userId);
+                                }
+                        }
+
+                        return list.stream().map(this::mapToResponse).collect(Collectors.toList());
+                }
+
+                return java.util.Collections.emptyList();
+        }
+
+        @Transactional(readOnly = true)
+        public org.springframework.data.domain.Page<OrdemServicoResponse> listarPaginated(
+                        org.springframework.data.domain.Pageable pageable,
+                        String status,
+                        String search,
+                        java.time.LocalDate date,
+                        Boolean atrasado) {
+
+                Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+                if (tenantId == null) {
+                        return org.springframework.data.domain.Page.empty();
+                }
+
+                com.empresa.comissao.domain.entity.User usuario = null;
+                org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
                                 .getContext().getAuthentication();
 
-                if (authentication != null
-                                && authentication.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
-                        com.empresa.comissao.domain.entity.User usuario = (com.empresa.comissao.domain.entity.User) authentication
-                                        .getPrincipal();
+                boolean isAdmin = auth.getAuthorities().stream()
+                                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN_EMPRESA") ||
+                                                a.getAuthority().equals("ROLE_SUPER_ADMIN") ||
+                                                a.getAuthority().equals("ROLE_ADMIN_LICENCA"));
 
-                        if (usuario.getEmpresa() != null) {
-                                List<OrdemServico> list;
-                                if (since != null) {
-                                        list = osRepository.findSyncData(usuario.getEmpresa().getId(), since);
-                                } else {
-                                        list = osRepository.findAllFullSync(usuario.getEmpresa().getId());
-                                }
-                                return list.stream().map(this::mapToResponse).collect(Collectors.toList());
+                if (!isAdmin) {
+                        // Simplify user retrieval logic
+                        if (auth.getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal) {
+                                Long userId = ((com.empresa.comissao.security.AuthPrincipal) auth.getPrincipal())
+                                                .getUserId();
+                                usuario = userRepository.findById(userId).orElse(null);
+                        } else if (auth.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
+                                usuario = (com.empresa.comissao.domain.entity.User) auth.getPrincipal();
                         }
                 }
 
-                // Fallback: return empty list if no empresa (security: don't expose all data)
-                return java.util.Collections.emptyList();
+                // 1. First Query: Find IDs with Filters (Efficient Count + Pagination)
+                org.springframework.data.jpa.domain.Specification<OrdemServico> spec = com.empresa.comissao.repository.spec.OrdemServicoSpecification
+                                .withFilter(tenantId, usuario, status, search, date, atrasado);
+
+                // Optimized Query: Find All with Filters AND Fetches (via Specification)
+                // Note: The Specification now handles JOIN FETCH for relations to avoid N+1.
+                org.springframework.data.domain.Page<OrdemServico> page = osRepository.findAll(spec, pageable);
+
+                return page.map(this::mapToResponse);
         }
 
         private OrdemServicoResponse mapToResponse(OrdemServico os) {
@@ -497,12 +830,15 @@ public class OrdemServicoService {
         private VeiculoResponse mapVeiculo(VeiculoServico v) {
                 return VeiculoResponse.builder()
                                 .id(v.getId())
+                                .localId(v.getLocalId())
                                 .placa(v.getPlaca())
                                 .modelo(v.getModelo())
                                 .cor(v.getCor())
                                 .valorTotal(v.getValorTotal())
                                 .pecas(v.getPecas().stream().map(p -> PecaServicoResponse.builder()
                                                 .id(p.getId())
+                                                .localId(p.getLocalId())
+                                                .tipoPecaId(p.getTipoPeca().getId())
                                                 .nomePeca(p.getTipoPeca().getNome())
                                                 .valorCobrado(p.getValor())
                                                 .descricao(p.getDescricao())
@@ -510,17 +846,37 @@ public class OrdemServicoService {
                                 .build();
         }
 
-        private void validarAcesso(OrdemServico os) {
+        private com.empresa.comissao.domain.entity.Empresa getEmpresaAutenticada() {
+                Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+                if (tenantId != null) {
+                        return com.empresa.comissao.domain.entity.Empresa.builder().id(tenantId).build();
+                }
+                throw new EntityNotFoundException("Usuário não vinculado a uma empresa");
+        }
+
+        private com.empresa.comissao.domain.entity.User getUserAutenticado() {
                 org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
                                 .getContext().getAuthentication();
+
+                if (auth != null && auth.getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal) {
+                        com.empresa.comissao.security.AuthPrincipal principal = (com.empresa.comissao.security.AuthPrincipal) auth
+                                        .getPrincipal();
+                        return com.empresa.comissao.domain.entity.User.builder().id(principal.getUserId())
+                                        .email(principal.getEmail()).build();
+                }
+                // Fallback for legacy tests or other auth methods
                 if (auth != null && auth.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
-                        com.empresa.comissao.domain.entity.User user = (com.empresa.comissao.domain.entity.User) auth
-                                        .getPrincipal(); // fixed indentation
-                        if (user.getEmpresa() != null) {
-                                if (os.getEmpresa() == null
-                                                || !os.getEmpresa().getId().equals(user.getEmpresa().getId())) {
-                                        throw new EntityNotFoundException("OS não encontrada");
-                                }
+                        return (com.empresa.comissao.domain.entity.User) auth.getPrincipal();
+                }
+                return null;
+        }
+
+        private void validarAcesso(OrdemServico os) {
+                Long tenantId = com.empresa.comissao.config.TenantContext.getCurrentTenant();
+                if (tenantId != null) {
+                        if (os.getEmpresa() == null
+                                        || !os.getEmpresa().getId().equals(tenantId)) {
+                                throw new EntityNotFoundException("OS não encontrada");
                         }
                 }
         }

@@ -44,4 +44,21 @@ public interface EmpresaRepository extends JpaRepository<Empresa, Long> {
     java.util.List<Empresa> findEmpresasComRevendedorBloqueado();
 
     long countByLicencaIdAndPlano(Long licencaId, Plano plano);
+
+    @Query("""
+                SELECT new com.empresa.comissao.security.AuthVersionService$TenantAccessSnapshot(
+                    e.id, e.tenantVersion, e.status,
+                    COALESCE(l.status, com.empresa.comissao.domain.enums.StatusLicenca.ATIVA)
+                )
+                FROM Empresa e
+                LEFT JOIN e.licenca l
+                WHERE e.id = :tenantId
+            """)
+    java.util.Optional<com.empresa.comissao.security.AuthVersionService.TenantAccessSnapshot> findTenantAccessVersionById(
+            @Param("tenantId") Long tenantId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE Empresa e SET e.tenantVersion = e.tenantVersion + 1 WHERE e.id = :tenantId")
+    void incrementTenantVersion(@Param("tenantId") Long tenantId);
 }

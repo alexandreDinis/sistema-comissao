@@ -328,7 +328,7 @@
                 <span class="total-label">
                     Desconto
                     <span th:if="${os.tipoDesconto?.name() == 'PERCENTUAL'}"
-                        th:text="'(' + ${os.valorDesconto} + '%)')"></span>
+                        th:text="'(' + ${os.valorDesconto} + '%)'"></span>
                     <span th:if="${os.tipoDesconto?.name() == 'VALOR_FIXO'}">(Valor Fixo)</span>
                 </span>
                 <span class="total-value" th:text="'-' + ${#numbers.formatCurrency(descontoCalculado)}">- R$ 0,00</span>

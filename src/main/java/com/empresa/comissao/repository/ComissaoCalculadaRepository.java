@@ -23,4 +23,8 @@ public interface ComissaoCalculadaRepository extends JpaRepository<ComissaoCalcu
 
     // For cleanup: find all for empresa (including user-specific ones)
     List<ComissaoCalculada> findByAnoMesReferenciaAndEmpresa(YearMonth anoMesReferencia, Empresa empresa);
+
+    @org.springframework.data.jpa.repository.Query("SELECT MAX(c.dataAtualizacao) FROM ComissaoCalculada c WHERE c.empresa.id = :empresaId")
+    java.time.LocalDateTime findMaxUpdatedAtByEmpresaId(
+            @org.springframework.data.repository.query.Param("empresaId") Long empresaId);
 }

@@ -11,6 +11,9 @@ public class ClienteSpecification {
         return (root, query, criteriaBuilder) -> {
             Specification<Cliente> spec = Specification.where(null);
 
+            // Filtra deletados por padrão
+            spec = spec.and((root2, query2, cb) -> cb.isNull(root2.get("deletedAt")));
+
             if (StringUtils.hasText(termo)) {
                 String likeTerm = "%" + termo.toLowerCase() + "%";
                 spec = spec.and((root2, query2, cb) -> cb.or(

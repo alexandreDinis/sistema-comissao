@@ -11,8 +11,6 @@ import lombok.Builder;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "ordens_servico")
@@ -93,6 +91,7 @@ public class OrdemServico {
     }
 
     @OneToMany(mappedBy = "ordemServico", cascade = CascadeType.ALL, orphanRemoval = true)
+    @jakarta.persistence.OrderBy("id ASC")
     @Builder.Default
     @lombok.ToString.Exclude
     @lombok.EqualsAndHashCode.Exclude

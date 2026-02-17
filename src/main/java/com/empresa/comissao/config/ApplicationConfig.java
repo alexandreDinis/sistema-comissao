@@ -14,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
+@org.springframework.cache.annotation.EnableCaching
 @RequiredArgsConstructor
 public class ApplicationConfig {
 

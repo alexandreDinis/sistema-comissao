@@ -8,7 +8,9 @@ import lombok.Builder;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "veiculos_servico")
+@Table(name = "veiculos_servico", uniqueConstraints = {
+        @UniqueConstraint(columnNames = { "ordem_servico_id", "placa" })
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,6 +21,7 @@ public class VeiculoServico {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(length = 20, nullable = false)
     private String placa;
     private String modelo;
     private String cor;
@@ -36,6 +39,7 @@ public class VeiculoServico {
     private BigDecimal valorTotal = BigDecimal.ZERO;
 
     @OneToMany(mappedBy = "veiculo", cascade = CascadeType.ALL, orphanRemoval = true)
+    @jakarta.persistence.OrderBy("id ASC")
     @Builder.Default
     @lombok.ToString.Exclude
     @lombok.EqualsAndHashCode.Exclude
