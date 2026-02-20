@@ -180,16 +180,13 @@ public class EmpresaController {
     }
 
     private String getFileExtension(MultipartFile file) {
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename != null && originalFilename.lastIndexOf(".") > 0) {
-            return originalFilename.substring(originalFilename.lastIndexOf("."));
-        }
         String contentType = file.getContentType();
         if (contentType != null) {
-            return switch (contentType) {
+            return switch (contentType.toLowerCase()) {
                 case "image/png" -> ".png";
                 case "image/webp" -> ".webp";
-                default -> ".jpg";
+                case "image/jpeg", "image/jpg" -> ".jpg";
+                default -> throw new IllegalArgumentException("Invalid content type for extension generation.");
             };
         }
         return ".jpg";
