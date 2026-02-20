@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  db-staging:
+    image: postgres:16
+    container_name: db-staging
+    environment:
+      POSTGRES_DB: stagingdb
+      POSTGRES_USER: staging
+      POSTGRES_PASSWORD: stagingpass
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_staging_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staging -d stagingdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  pg_staging_data:
