@@ -56,23 +56,20 @@ public class AuthVersionService {
      * Incrementa versão de auth (força invalidação de tokens).
      * Chamado quando: role muda, permissões mudam, usuário desativado, etc.
      */
+    @org.springframework.cache.annotation.CacheEvict(value = "userAuthVersion", key = "#userId")
     public void incrementUserAuthVersion(Long userId) {
         log.info("[AuthInvalidate] Incrementando auth_version para userId={}", userId);
         userRepository.incrementAuthVersion(userId);
-        // Invalidar cache
-        // org.springframework.cache.CacheManager cacheManager = null; // injetar se
-        // precisar
-        // cacheManager.getCache("userAuthVersion").evict(userId);
     }
 
     /**
      * Incrementa versão de tenant (força invalidação de tokens).
      * Chamado quando: plano muda, empresa bloqueada, licença suspensa, etc.
      */
+    @org.springframework.cache.annotation.CacheEvict(value = "tenantAccessVersion", key = "#tenantId")
     public void incrementTenantVersion(Long tenantId) {
         log.info("[AuthInvalidate] Incrementando tenant_version para tenantId={}", tenantId);
         empresaRepository.incrementTenantVersion(tenantId);
-        // Invalidar cache
     }
 
     // ===== DTOs para snapshots leves =====
