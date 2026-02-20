@@ -183,7 +183,20 @@ public class AuthController {
         private final com.empresa.comissao.service.PasswordResetService passwordResetService;
 
         @PostMapping("/forgot-password")
-        public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request,
+                        HttpServletRequest httpRequest) {
+                String ip = httpRequest.getRemoteAddr();
+
+                Bucket ipBucket = rateLimitingService.resolvePasswordResetBucket("ip_" + ip);
+                String safeEmail = request.getEmail() != null ? request.getEmail().toLowerCase() : "unknown";
+                Bucket emailBucket = rateLimitingService.resolvePasswordResetBucket("email_" + safeEmail);
+
+                if (!ipBucket.tryConsume(1) || !emailBucket.tryConsume(1)) {
+                        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                                        .body(java.util.Map.of("error",
+                                                        "Muitas tentativas de recuperação. Tente novamente em 1 hora."));
+                }
+
                 // Always return success to not reveal if email exists
                 passwordResetService.initiatePasswordReset(request.getEmail());
                 return ResponseEntity.ok(java.util.Map.of(

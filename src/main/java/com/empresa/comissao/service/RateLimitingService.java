@@ -17,6 +17,18 @@ public class RateLimitingService {
         return cache.computeIfAbsent(key, this::newBucket);
     }
 
+    public Bucket resolvePasswordResetBucket(String key) {
+        return cache.computeIfAbsent("pwd_reset_" + key, k -> {
+            Bandwidth limit = Bandwidth.builder()
+                    .capacity(3)
+                    .refillIntervally(3, Duration.ofHours(1))
+                    .build();
+            return Bucket.builder()
+                    .addLimit(limit)
+                    .build();
+        });
+    }
+
     private Bucket newBucket(String key) {
         // 10 failed attempts per 10 minutes (more reasonable for testing)
         Bandwidth limit = Bandwidth.builder()
