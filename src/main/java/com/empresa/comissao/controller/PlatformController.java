@@ -16,6 +16,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import com.empresa.comissao.security.AuthPrincipal;
+
 import java.util.HashSet;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +37,11 @@ public class PlatformController {
     @GetMapping("/tenants")
     @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     public ResponseEntity<List<Empresa>> listTenants(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
+        User principal = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
+
         // Isolation Check
         if (principal.getRole() == Role.ADMIN_LICENCA || principal.getRole() == Role.REVENDEDOR) {
             if (principal.getLicenca() == null) {
@@ -52,7 +58,11 @@ public class PlatformController {
     @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     @Transactional
     public ResponseEntity<?> createTenant(@RequestBody CreateTenantRequest request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
+
+        User principal = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
 
         // Determine License Context
         com.empresa.comissao.domain.entity.Licenca ownerLicenca = null;
@@ -106,7 +116,11 @@ public class PlatformController {
     @GetMapping("/stats")
     @PreAuthorize("hasAuthority('PLATFORM_DASHBOARD_VIEW') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     public ResponseEntity<PlatformStats> getStats(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
+
+        User principal = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
 
         // Isolation Logic
         if (principal.getRole() == Role.ADMIN_LICENCA || principal.getRole() == Role.REVENDEDOR) {
@@ -161,7 +175,11 @@ public class PlatformController {
     @PutMapping("/tenants/{id}/toggle-status")
     @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     public ResponseEntity<Empresa> toggleTenantStatus(@PathVariable Long id,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
+        User principal = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
+
         var empresa = empresaRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
@@ -176,7 +194,11 @@ public class PlatformController {
     @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     @Transactional
     public ResponseEntity<Empresa> updateTenant(@PathVariable Long id, @RequestBody UpdateTenantRequest request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
+        User principal = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
+
         var empresa = empresaRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
 
@@ -279,7 +301,11 @@ public class PlatformController {
     @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
     @Transactional
     public ResponseEntity<?> resetTenantAdminPassword(@PathVariable Long id, @RequestBody ResetPasswordRequest request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal User principal) {
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
+
+        User principal = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
 
         var empresa = empresaRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
