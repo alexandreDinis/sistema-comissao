@@ -474,6 +474,9 @@ public class FinanceiroService {
                                 .tipo(TipoContaReceber.ORDEM_SERVICO)
                                 .faturamento(faturamento)
                                 .ordemServico(faturamento.getOrdemServico())
+                                .cliente(faturamento.getOrdemServico() != null
+                                                ? faturamento.getOrdemServico().getCliente()
+                                                : null)
                                 .funcionarioResponsavel(faturamento.getUsuario())
                                 .meioPagamento(meioPagamento);
 

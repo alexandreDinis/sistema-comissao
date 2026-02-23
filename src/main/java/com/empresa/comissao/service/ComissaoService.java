@@ -664,35 +664,10 @@ public class ComissaoService {
                 BigDecimal faturamentoTotal;
 
                 if (empresaFresh != null) {
-                        com.empresa.comissao.domain.enums.ModoComissao modo = empresaFresh.getModoComissao();
-
-                        if (modo == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
-                                // Modo COLETIVA: Receita total da empresa (por competência)
-                                faturamentoTotal = contaReceberRepository
-                                                .sumByCompetenciaBetweenForReports(empresaFresh, inicioDoMes, fimDoMes);
-                                log.info("💰 Receita DRE (COLETIVA - Competência): {}", faturamentoTotal);
-                        } else {
-                                // Modo INDIVIDUAL: Receita do funcionário (por competência)
-                                if (usuario != null && !usuario.isParticipaComissao()) {
-                                        // Usuário não participa de comissão, mas mostra receita global da empresa
-                                        faturamentoTotal = contaReceberRepository
-                                                        .sumByCompetenciaBetweenForReports(empresaFresh, inicioDoMes,
-                                                                        fimDoMes);
-                                        log.info("💰 Receita DRE (ADMIN sem comissão - Competência global): {}",
-                                                        faturamentoTotal);
-                                } else if (usuario != null) {
-                                        faturamentoTotal = contaReceberRepository
-                                                        .sumByCompetenciaBetweenAndFuncionarioForReports(
-                                                                        empresaFresh, usuario, inicioDoMes, fimDoMes);
-                                        log.info("💰 Receita DRE (INDIVIDUAL - Competência): {}", faturamentoTotal);
-                                } else {
-                                        // Fallback para caso sem usuário
-                                        faturamentoTotal = contaReceberRepository
-                                                        .sumByCompetenciaBetweenForReports(empresaFresh, inicioDoMes,
-                                                                        fimDoMes);
-                                        log.info("💰 Receita DRE (Fallback - Competência): {}", faturamentoTotal);
-                                }
-                        }
+                        // Para a Auditoria Financeira / DRE, queremos SEMPRE a visão global da empresa
+                        faturamentoTotal = contaReceberRepository
+                                        .sumByCompetenciaBetweenForReports(empresaFresh, inicioDoMes, fimDoMes);
+                        log.info("💰 Receita DRE (Competência global): {}", faturamentoTotal);
                 } else {
                         // Fallback: usar faturamento tradicional se não houver empresa
                         faturamentoTotal = faturamentoRepository
@@ -702,24 +677,44 @@ public class ComissaoService {
                 }
 
                 // 1. Obter Comissão do Mês (CONTINUA usando CAIXA como antes)
-                ComissaoCalculada comissao;
-                if (empresaFresh != null && empresaFresh
-                                .getModoComissao() == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
-                        log.info("📊 Comissão calculada em modo COLETIVA para empresa: {}", empresaFresh.getNome());
-                        comissao = calcularComissaoEmpresaMensal(ano, mes, empresaFresh);
-                } else {
-                        // Modo Individual
-                        if (usuario != null && !usuario.isParticipaComissao()) {
-                                log.info("ℹ️ Usuário {} não participa de comissão. Zerando valores de comissão.",
-                                                usuario.getEmail());
-                                comissao = ComissaoCalculada.builder()
-                                                .faturamentoMensalTotal(BigDecimal.ZERO) // Comissão zerada
-                                                .valorBrutoComissao(BigDecimal.ZERO)
-                                                .saldoAReceber(BigDecimal.ZERO)
-                                                .valorTotalAdiantamentos(BigDecimal.ZERO)
-                                                .build();
+                ComissaoCalculada comissao = ComissaoCalculada.builder()
+                                .faturamentoMensalTotal(BigDecimal.ZERO)
+                                .valorBrutoComissao(BigDecimal.ZERO)
+                                .saldoAReceber(BigDecimal.ZERO)
+                                .valorTotalAdiantamentos(BigDecimal.ZERO)
+                                .build();
+
+                if (empresaFresh != null) {
+                        if (empresaFresh.getModoComissao() == com.empresa.comissao.domain.enums.ModoComissao.COLETIVA) {
+                                log.info("📊 Comissão calculada em modo COLETIVA para DRE da empresa: {}",
+                                                empresaFresh.getNome());
+                                comissao = calcularComissaoEmpresaMensal(ano, mes, empresaFresh);
                         } else {
-                                comissao = calcularEObterComissaoMensal(ano, mes, usuario);
+                                log.info("📊 Agregando comissões INDIVIDUAIS de todos os funcionários para DRE da empresa: {}",
+                                                empresaFresh.getNome());
+                                List<ComissaoCalculada> comissoes = listarComissoesEmpresa(ano, mes, empresaFresh);
+
+                                BigDecimal totalBruto = BigDecimal.ZERO;
+                                BigDecimal totalAdiantamentos = BigDecimal.ZERO;
+                                BigDecimal totalSaldo = BigDecimal.ZERO;
+
+                                for (ComissaoCalculada c : comissoes) {
+                                        totalBruto = totalBruto.add(
+                                                        c.getValorBrutoComissao() != null ? c.getValorBrutoComissao()
+                                                                        : BigDecimal.ZERO);
+                                        totalAdiantamentos = totalAdiantamentos
+                                                        .add(c.getValorTotalAdiantamentos() != null
+                                                                        ? c.getValorTotalAdiantamentos()
+                                                                        : BigDecimal.ZERO);
+                                        totalSaldo = totalSaldo.add(c.getSaldoAReceber() != null ? c.getSaldoAReceber()
+                                                        : BigDecimal.ZERO);
+                                }
+
+                                comissao = ComissaoCalculada.builder()
+                                                .valorBrutoComissao(totalBruto)
+                                                .valorTotalAdiantamentos(totalAdiantamentos)
+                                                .saldoAReceber(totalSaldo)
+                                                .build();
                         }
                 }
 
