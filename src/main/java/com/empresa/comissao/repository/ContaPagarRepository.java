@@ -107,6 +107,16 @@ public interface ContaPagarRepository extends JpaRepository<ContaPagar, Long> {
         java.util.Optional<ContaPagar> findFirstByComissao(
                         com.empresa.comissao.domain.entity.ComissaoCalculada comissao);
 
+        // Listar por comissão e status
+        List<ContaPagar> findByComissaoAndStatus(
+                        com.empresa.comissao.domain.entity.ComissaoCalculada comissao,
+                        StatusConta status);
+
+        // Somar valor de faturas PAGAS por comissão
+        @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaPagar c " +
+                        "WHERE c.comissao = :comissao AND c.status = 'PAGO'")
+        BigDecimal sumPaidByComissao(@Param("comissao") com.empresa.comissao.domain.entity.ComissaoCalculada comissao);
+
         // Somar valor de faturas pendentes por cartão (para cálculo de limite
         // disponível)
         @Query("SELECT COALESCE(SUM(c.valor), 0) FROM ContaPagar c " +

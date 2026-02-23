@@ -87,16 +87,9 @@ public class ComissaoService {
 
                 if (comissaoExistente.isPresent()) {
                         if (force) {
-                                if (comissaoExistente.get().getQuitado() != null
-                                                && comissaoExistente.get().getQuitado()) {
-                                        log.warn("⛔ Não é possível recalcular comissão paga: {}",
-                                                        comissaoExistente.get().getId());
-                                        return comissaoExistente.get();
-                                }
-                                log.info("🔄 Forçando recálculo: Removendo comissão antiga {}",
+                                log.info("🔄 Atualizando valores da comissão existente: {}",
                                                 comissaoExistente.get().getId());
-                                comissaoCalculadaRepository.delete(comissaoExistente.get());
-                                comissaoExistente = Optional.empty();
+                                // We will update the existing instance instead of deleting it
                         } else {
                                 log.info("✅ Comissão encontrada em cache: {} - Valor: {} - Quitado: {}",
                                                 anoMesReferencia,
@@ -247,36 +240,56 @@ public class ComissaoService {
                 log.info("📈 Percentual aplicado: {} ({})", percentualAplicado, faixaDescricao);
 
                 // 5. Calcular o valor bruto da comissão
+                // 5. Calcular o valor bruto da comissão
                 BigDecimal valorBrutoComissao = faturamentoMensalTotal.multiply(percentualAplicado)
                                 .setScale(2, RoundingMode.HALF_UP);
 
                 log.info("💵 Valor bruto da comissão: {}", valorBrutoComissao);
 
-                // 6. Calcular o saldo a receber (incluindo carryover)
-                // Fórmula: valorBruto - adiantamentos + saldoAnterior (saldoAnterior pode ser
-                // negativo)
+                // 6. Somar pagamentos já realizados (valor_quitado vindo de ContaPagar)
+                BigDecimal valorQuitado = BigDecimal.ZERO;
+                if (comissaoExistente.isPresent()) {
+                        valorQuitado = contaPagarRepository.sumPaidByComissao(comissaoExistente.get());
+                }
+
+                log.info("💳 Pagamentos já realizados (valor_quitado): {}", valorQuitado);
+
+                // 7. Calcular o saldo a receber (incluindo carryover e abatendo o que já foi
+                // pago)
+                // Fórmula: (valorBruto - adiantamentos + saldoAnterior) - valorQuitado
                 BigDecimal saldoAReceber = valorBrutoComissao.subtract(valorTotalAdiantamentos)
-                                .add(saldoAnterior) // Inclui carryover (se negativo, diminui o saldo)
+                                .add(saldoAnterior)
+                                .subtract(valorQuitado)
                                 .setScale(2, RoundingMode.HALF_UP);
 
-                log.info("✅ Saldo a receber (com carryover): {}", saldoAReceber);
+                log.info("✅ Saldo a receber (com carryover e pagamentos): {}", saldoAReceber);
 
-                // 7. Criar e persistir o objeto ComissaoCalculada
-                ComissaoCalculada novaComissao = ComissaoCalculada.builder()
+                // 8. Criar ou Atualizar o objeto ComissaoCalculada
+                ComissaoCalculada comissao = comissaoExistente.orElseGet(() -> ComissaoCalculada.builder()
                                 .anoMesReferencia(anoMesReferencia)
-                                .faturamentoMensalTotal(faturamentoMensalTotal)
-                                .faixaComissaoDescricao(faixaDescricao)
-                                .porcentagemComissaoAplicada(percentualAplicado.multiply(new BigDecimal("100")))
-                                .valorBrutoComissao(valorBrutoComissao)
-                                .valorTotalAdiantamentos(valorTotalAdiantamentos)
-                                .saldoAReceber(saldoAReceber)
-                                .saldoAnterior(saldoAnterior) // NOVO: Saldo do mês anterior (carryover)
                                 .usuario(usuario)
-                                .empresa(usuario != null ? usuario.getEmpresa() : null) // Bind business data to tenant
-                                .build();
+                                .empresa(usuario != null ? usuario.getEmpresa() : null)
+                                .build());
 
-                ComissaoCalculada salva = comissaoCalculadaRepository.save(novaComissao);
-                log.info("💾 Comissão salva com ID: {}", salva.getId());
+                comissao.setFaturamentoMensalTotal(faturamentoMensalTotal);
+                comissao.setFaixaComissaoDescricao(faixaDescricao);
+                comissao.setPorcentagemComissaoAplicada(percentualAplicado.multiply(new BigDecimal("100")));
+                comissao.setValorBrutoComissao(valorBrutoComissao);
+                comissao.setValorTotalAdiantamentos(valorTotalAdiantamentos);
+                comissao.setValorQuitado(valorQuitado);
+                comissao.setSaldoAReceber(saldoAReceber);
+                comissao.setSaldoAnterior(saldoAnterior);
+
+                // Status Auto-Update: Se saldo zerado, marca como quitado. Se saldo positivo,
+                // reabre.
+                comissao.setQuitado(saldoAReceber.compareTo(BigDecimal.ZERO) <= 0
+                                && valorQuitado.compareTo(BigDecimal.ZERO) > 0);
+                if (comissao.getQuitado()) {
+                        comissao.setDataQuitacao(java.time.LocalDateTime.now());
+                }
+
+                ComissaoCalculada salva = comissaoCalculadaRepository.save(comissao);
+                log.info("💾 Comissão salva/atualizada com ID: {}", salva.getId());
 
                 return salva;
         }
@@ -316,16 +329,8 @@ public class ComissaoService {
 
                 if (comissaoExistente.isPresent()) {
                         if (force) {
-                                if (comissaoExistente.get().getQuitado() != null
-                                                && comissaoExistente.get().getQuitado()) {
-                                        log.warn("⛔ Não é possível recalcular comissão empresa paga: {}",
-                                                        comissaoExistente.get().getId());
-                                        return comissaoExistente.get();
-                                }
-                                log.info("🔄 Forçando recálculo EMPRESA: Removendo comissão antiga {}",
+                                log.info("🔄 Atualizando valores da comissão EMPRESA existente: {}",
                                                 comissaoExistente.get().getId());
-                                comissaoCalculadaRepository.delete(comissaoExistente.get());
-                                comissaoExistente = Optional.empty();
                         } else {
                                 log.info("✅ Comissão empresa encontrada em cache: {}", anoMesReferencia);
                                 return comissaoExistente.get();
@@ -430,32 +435,52 @@ public class ComissaoService {
 
                 log.info("📈 Faixa encontrada: {} - {}%", faixaDescricao, percentualAplicado);
 
+                // 5. Calcular o valor bruto da comissão
                 BigDecimal valorBrutoComissao = faturamentoMensalTotal.multiply(percentualAplicado)
-                                .setScale(2, java.math.RoundingMode.HALF_UP);
+                                .setScale(2, RoundingMode.HALF_UP);
 
-                // Incluir carryover no saldo a receber
+                log.info("💵 Valor bruto da empresa: {}", valorBrutoComissao);
+
+                // 6. Somar pagamentos já realizados (da empresa consolidada)
+                BigDecimal valorQuitado = BigDecimal.ZERO;
+                if (comissaoExistente.isPresent()) {
+                        valorQuitado = contaPagarRepository.sumPaidByComissao(comissaoExistente.get());
+                }
+
+                log.info("💳 Pagamentos empresa já realizados: {}", valorQuitado);
+
+                // 7. Calcular o saldo a receber consolidado
                 BigDecimal saldoAReceber = valorBrutoComissao.subtract(valorTotalAdiantamentos)
-                                .add(saldoAnterior) // Inclui carryover (se negativo, diminui o saldo)
-                                .setScale(2, java.math.RoundingMode.HALF_UP);
+                                .add(saldoAnterior)
+                                .subtract(valorQuitado)
+                                .setScale(2, RoundingMode.HALF_UP);
 
-                log.info("✅ Saldo a receber da empresa (com carryover): {}", saldoAReceber);
+                log.info("✅ Saldo a receber empresa (com carryover e pagamentos): {}", saldoAReceber);
 
-                // 5. Save company-wide commission (no usuario, only empresa)
-                ComissaoCalculada novaComissao = ComissaoCalculada.builder()
+                // 8. Atualizar ou Criar
+                ComissaoCalculada comissao = comissaoExistente.orElseGet(() -> ComissaoCalculada.builder()
                                 .anoMesReferencia(anoMesReferencia)
-                                .faturamentoMensalTotal(faturamentoMensalTotal)
-                                .faixaComissaoDescricao(faixaDescricao)
-                                .porcentagemComissaoAplicada(percentualAplicado.multiply(new BigDecimal("100")))
-                                .valorBrutoComissao(valorBrutoComissao)
-                                .valorTotalAdiantamentos(valorTotalAdiantamentos)
-                                .saldoAReceber(saldoAReceber)
-                                .saldoAnterior(saldoAnterior) // NOVO: Saldo do mês anterior (carryover)
-                                .usuario(null) // No specific user for company-wide report
+                                .usuario(null)
                                 .empresa(empresa)
-                                .build();
+                                .build());
 
-                ComissaoCalculada salva = comissaoCalculadaRepository.save(novaComissao);
-                log.info("💾 Comissão empresa salva com ID: {}", salva.getId());
+                comissao.setFaturamentoMensalTotal(faturamentoMensalTotal);
+                comissao.setFaixaComissaoDescricao(faixaDescricao);
+                comissao.setPorcentagemComissaoAplicada(percentualAplicado.multiply(new BigDecimal("100")));
+                comissao.setValorBrutoComissao(valorBrutoComissao);
+                comissao.setValorTotalAdiantamentos(valorTotalAdiantamentos);
+                comissao.setValorQuitado(valorQuitado);
+                comissao.setSaldoAReceber(saldoAReceber);
+                comissao.setSaldoAnterior(saldoAnterior);
+
+                comissao.setQuitado(saldoAReceber.compareTo(BigDecimal.ZERO) <= 0
+                                && valorQuitado.compareTo(BigDecimal.ZERO) > 0);
+                if (comissao.getQuitado()) {
+                        comissao.setDataQuitacao(java.time.LocalDateTime.now());
+                }
+
+                ComissaoCalculada salva = comissaoCalculadaRepository.save(comissao);
+                log.info("💾 Comissão empresa salva/atualizada com ID: {}", salva.getId());
 
                 return salva;
         }
@@ -472,46 +497,60 @@ public class ComissaoService {
                                 .orElseThrow(() -> new com.empresa.comissao.exception.BusinessException(
                                                 "Comissão não encontrada com ID: " + comissaoId));
 
-                if (comissao.getQuitado() != null && comissao.getQuitado()) {
+                // 1. Recalcular para garantir que o saldo está atualizado antes de quitar
+                comissao = calcularEObterComissaoMensal(
+                                comissao.getAnoMesReferencia().getYear(),
+                                comissao.getAnoMesReferencia().getMonthValue(),
+                                comissao.getUsuario(),
+                                true);
+
+                BigDecimal saldo = comissao.getSaldoAReceber();
+
+                if (saldo == null || saldo.compareTo(BigDecimal.ZERO) <= 0) {
                         throw new com.empresa.comissao.exception.BusinessException(
-                                        "Esta comissão já foi quitada em " + comissao.getDataQuitacao());
+                                        "Esta comissão já está totalmente quitada ou não possui saldo.");
                 }
 
-                // INTEGRACAO FINANCEIRO: Garantir que existe conta paga
-                try {
-                        java.util.Optional<com.empresa.comissao.domain.entity.ContaPagar> contaOpt = financeiroService
-                                        .buscarContaPagarPorComissao(comissao);
+                log.info("💰 Saldo atual a quitar: {}", saldo);
 
-                        if (contaOpt.isPresent()) {
-                                com.empresa.comissao.domain.entity.ContaPagar conta = contaOpt.get();
-                                if (conta.getStatus() != com.empresa.comissao.domain.enums.StatusConta.PAGO) {
-                                        log.info("🔄 Conta a pagar existente encontrada (ID: {}). Quitando-a...",
-                                                        conta.getId());
-                                        financeiroService.pagarConta(conta.getId(), LocalDate.now(),
-                                                        com.empresa.comissao.domain.enums.MeioPagamento.OUTROS);
-                                } else {
-                                        log.info("ℹ️ Conta a pagar associada já está PAGA (ID: {}).", conta.getId());
-                                }
+                // 2. IDEMPOTÊNCIA: Verificar se já existe uma conta PENDENTE para esta comissão
+                try {
+                        java.util.List<com.empresa.comissao.domain.entity.ContaPagar> contasPendentes = financeiroService
+                                        .listarContasPendentesPorComissao(comissao);
+
+                        if (!contasPendentes.isEmpty()) {
+                                com.empresa.comissao.domain.entity.ContaPagar contaPendente = contasPendentes.get(0);
+                                log.info("🔄 Conta PENDENTE encontrada (ID: {}). Atualizando valor para {} e quitando...",
+                                                contaPendente.getId(), saldo);
+
+                                // Atualizar valor da conta pendente para o saldo atual (evita duplicidade de
+                                // cliques)
+                                contaPendente.setValor(saldo);
+                                financeiroService.salvarContaPagar(contaPendente);
+
+                                financeiroService.pagarConta(contaPendente.getId(), LocalDate.now(),
+                                                com.empresa.comissao.domain.enums.MeioPagamento.OUTROS);
                         } else {
-                                log.info("🆕 Nenhuma conta a pagar encontrada. Criando registro financeiro PAGO...");
+                                log.info("🆕 Nenhuma conta pendente. Criando nova quitação para o saldo: {}", saldo);
                                 financeiroService.criarContaPagarComissaoQuitada(comissao,
                                                 comissao.getUsuario() != null ? comissao.getUsuario().getEmpresa()
-                                                                : comissao.getEmpresa());
+                                                                : comissao.getEmpresa(),
+                                                saldo);
                         }
                 } catch (Exception e) {
-                        log.error("❌ Erro ao integrar com financeiro na quitação de comissão: {}", e.getMessage(), e);
-                        // Dependendo da regra de negócio, poderíamos lançar exceção e impedir quitação.
-                        // Por segurança financeira, vamos impedir.
+                        log.error("❌ Erro ao processar quitação financeira: {}", e.getMessage());
                         throw new com.empresa.comissao.exception.BusinessException(
-                                        "Erro ao registrar pagamento no financeiro: " + e.getMessage());
+                                        "Erro ao processar quitação financeira: " + e.getMessage());
                 }
 
-                comissao.setQuitado(true);
-                comissao.setDataQuitacao(java.time.LocalDateTime.now());
-                comissao.setValorQuitado(comissao.getSaldoAReceber());
+                // 3. Atualizar cache final
+                if (comissao.getUsuario() != null) {
+                        invalidarCache(comissao.getUsuario(), comissao.getAnoMesReferencia());
+                } else if (comissao.getEmpresa() != null) {
+                        invalidarCacheEmpresa(comissao.getEmpresa(), comissao.getAnoMesReferencia());
+                }
 
-                comissaoCalculadaRepository.save(comissao);
-                log.info("✅ Comissão {} quitada com sucesso. Valor: {}", comissaoId, comissao.getValorQuitado());
+                log.info("✅ Comissão {} processada para quitação com sucesso.", comissaoId);
         }
 
         /**
@@ -531,6 +570,19 @@ public class ComissaoService {
                                         "Comissão não possui saldo positivo a pagar.");
                 }
 
+                // IDEMPOTÊNCIA: Reutilizar conta pendente se já existir
+                java.util.List<com.empresa.comissao.domain.entity.ContaPagar> pendentes = financeiroService
+                                .listarContasPendentesPorComissao(comissao);
+
+                if (!pendentes.isEmpty()) {
+                        com.empresa.comissao.domain.entity.ContaPagar existente = pendentes.get(0);
+                        log.info("🔄 Reutilizando conta pendente ID: {} (Valor antigo: {} -> Novo: {})",
+                                        existente.getId(), existente.getValor(), comissao.getSaldoAReceber());
+                        existente.setValor(comissao.getSaldoAReceber());
+                        existente.setDataVencimento(dataVencimento);
+                        return financeiroService.salvarContaPagar(existente);
+                }
+
                 return financeiroService.criarContaPagarComissao(
                                 comissao,
                                 comissao.getUsuario() != null ? comissao.getUsuario().getEmpresa()
@@ -540,19 +592,14 @@ public class ComissaoService {
 
         @Transactional
         public void invalidarCache(com.empresa.comissao.domain.entity.User usuario, YearMonth anoMes) {
-                log.info("🗑️ Invalidando cache de comissão para Usuário: {} - Mês: {}",
+                log.info("🔄 Atualizando cache de comissão para Usuário: {} - Mês: {}",
                                 usuario != null ? usuario.getEmail() : "GLOBAL", anoMes);
 
-                // Invalidate user-specific cache
-                comissaoCalculadaRepository.findFirstByAnoMesReferenciaAndUsuario(anoMes, usuario)
-                                .ifPresent(comissao -> {
-                                        comissaoCalculadaRepository.delete(comissao);
-                                        log.info("✅ Cache de usuário invalidado com sucesso.");
-                                });
-
-                // Also invalidate empresa cache if user has empresa
-                if (usuario != null && usuario.getEmpresa() != null) {
-                        invalidarCacheEmpresa(usuario.getEmpresa(), anoMes);
+                // Instead of deleting, we trigger a recalculation which will update the record
+                try {
+                        calcularEObterComissaoMensal(anoMes.getYear(), anoMes.getMonthValue(), usuario, true);
+                } catch (Exception e) {
+                        log.warn("⚠️ Não foi possível atualizar cache de comissão: {}", e.getMessage());
                 }
         }
 
@@ -560,12 +607,13 @@ public class ComissaoService {
         public void invalidarCacheEmpresa(com.empresa.comissao.domain.entity.Empresa empresa, YearMonth anoMes) {
                 if (empresa == null)
                         return;
-                log.info("🗑️ Invalidando cache de comissão para Empresa: {} - Mês: {}", empresa.getNome(), anoMes);
-                comissaoCalculadaRepository.findByAnoMesReferenciaAndEmpresa(anoMes, empresa)
-                                .forEach(comissao -> {
-                                        comissaoCalculadaRepository.delete(comissao);
-                                });
-                log.info("✅ Cache de empresa invalidado com sucesso.");
+                log.info("🔄 Atualizando cache de comissão para Empresa: {} - Mês: {}", empresa.getNome(), anoMes);
+
+                try {
+                        calcularComissaoEmpresaMensal(anoMes.getYear(), anoMes.getMonthValue(), empresa, true);
+                } catch (Exception e) {
+                        log.warn("⚠️ Não foi possível atualizar cache de comissão da empresa: {}", e.getMessage());
+                }
         }
 
         @Transactional

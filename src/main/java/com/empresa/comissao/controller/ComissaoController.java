@@ -101,6 +101,7 @@ public class ComissaoController {
                 comissao.getPorcentagemComissaoAplicada(),
                 comissao.getValorBrutoComissao(),
                 comissao.getValorTotalAdiantamentos(),
+                comissao.getValorQuitado(),
                 comissao.getSaldoAReceber(),
                 comissao.getSaldoAnterior(),
                 comissao.getQuitado(),
@@ -197,6 +198,7 @@ public class ComissaoController {
                         c.getPorcentagemComissaoAplicada(),
                         c.getValorBrutoComissao(),
                         c.getValorTotalAdiantamentos(),
+                        c.getValorQuitado(), // NOVO: Já Pago
                         c.getSaldoAReceber(),
                         c.getQuitado() != null && c.getQuitado(),
                         c.getDataQuitacao() != null ? c.getDataQuitacao().toString() : null))
@@ -217,6 +219,7 @@ public class ComissaoController {
         private BigDecimal porcentagem;
         private BigDecimal valorBruto;
         private BigDecimal adiantamentos;
+        private BigDecimal valorQuitado; // NOVO
         private BigDecimal saldoAPagar;
         private boolean quitado;
         private String dataQuitacao;
@@ -231,6 +234,7 @@ public class ComissaoController {
         private BigDecimal porcentagemComissao;
         private BigDecimal valorBrutoComissao;
         private BigDecimal valorAdiantado;
+        private BigDecimal valorQuitado; // NOVO: O que já foi pago
         private BigDecimal saldoAReceber;
         private BigDecimal saldoAnterior; // NOVO: Saldo do mês anterior (carryover)
         private Boolean quitado; // NOVO: Se foi pago
