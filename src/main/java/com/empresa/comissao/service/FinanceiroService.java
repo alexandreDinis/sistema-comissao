@@ -145,22 +145,28 @@ public class FinanceiroService {
                 return parcelas;
         }
 
-        /**
-         * Marca uma conta a pagar como paga.
-         */
         @Transactional
         public ContaPagar pagarConta(Long contaId, LocalDate dataPagamento, MeioPagamento meioPagamento) {
+                log.info("💸 Pagando conta ID: {} em {}", contaId, dataPagamento);
                 ContaPagar conta = contaPagarRepository.findById(contaId)
                                 .orElseThrow(() -> new BusinessException("Conta a pagar não encontrada: " + contaId));
 
                 if (conta.getStatus() == StatusConta.PAGO) {
-                        throw new BusinessException("Conta já está paga");
+                        return conta; // Já está paga, idempotência
                 }
 
-                conta.marcarComoPago(dataPagamento, meioPagamento);
+                conta.setDataPagamento(dataPagamento);
+                conta.setMeioPagamento(meioPagamento);
+                conta.setStatus(StatusConta.PAGO);
+
                 ContaPagar salva = contaPagarRepository.save(conta);
                 log.info("✅ Conta {} marcada como paga em {}", contaId, dataPagamento);
                 return salva;
+        }
+
+        @Transactional
+        public ContaPagar salvarContaPagar(ContaPagar conta) {
+                return contaPagarRepository.save(conta);
         }
 
         /**
@@ -305,6 +311,14 @@ public class FinanceiroService {
         public ContaPagar criarContaPagarComissaoQuitada(
                         com.empresa.comissao.domain.entity.ComissaoCalculada comissao,
                         Empresa empresa) {
+                return criarContaPagarComissaoQuitada(comissao, empresa, comissao.getSaldoAReceber());
+        }
+
+        @Transactional
+        public ContaPagar criarContaPagarComissaoQuitada(
+                        com.empresa.comissao.domain.entity.ComissaoCalculada comissao,
+                        Empresa empresa,
+                        BigDecimal valor) {
 
                 log.info("💸 Criando conta a pagar QUITADA para comissão ID: {}", comissao.getId());
 
@@ -319,7 +333,7 @@ public class FinanceiroService {
                                 .empresa(empresa)
                                 .funcionario(comissao.getUsuario())
                                 .descricao(descricao)
-                                .valor(comissao.getSaldoAReceber()) // Valor Líquido
+                                .valor(valor) // Usar o valor passado por parâmetro
                                 .dataCompetencia(comissao.getAnoMesReferencia().atEndOfMonth())
                                 .dataVencimento(LocalDate.now()) // Vence hoje (pois foi pago hoje)
                                 .dataPagamento(LocalDate.now()) // Pago hoje
@@ -341,6 +355,14 @@ public class FinanceiroService {
         public java.util.Optional<ContaPagar> buscarContaPagarPorComissao(
                         com.empresa.comissao.domain.entity.ComissaoCalculada comissao) {
                 return contaPagarRepository.findFirstByComissao(comissao);
+        }
+
+        /**
+         * Lista todas as contas pendentes para uma determinada comissão.
+         */
+        public java.util.List<ContaPagar> listarContasPendentesPorComissao(
+                        com.empresa.comissao.domain.entity.ComissaoCalculada comissao) {
+                return contaPagarRepository.findByComissaoAndStatus(comissao, StatusConta.PENDENTE);
         }
 
         /**
@@ -474,6 +496,9 @@ public class FinanceiroService {
                                 .tipo(TipoContaReceber.ORDEM_SERVICO)
                                 .faturamento(faturamento)
                                 .ordemServico(faturamento.getOrdemServico())
+                                .cliente(faturamento.getOrdemServico() != null
+                                                ? faturamento.getOrdemServico().getCliente()
+                                                : null)
                                 .funcionarioResponsavel(faturamento.getUsuario())
                                 .meioPagamento(meioPagamento);
 

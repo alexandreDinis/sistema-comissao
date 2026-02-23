@@ -300,8 +300,6 @@ public class OrdemServicoService {
                 Cliente cliente = clienteRepository.findById(request.getClienteId())
                                 .orElseThrow(() -> new EntityNotFoundException("Cliente não encontrado"));
 
-                com.empresa.comissao.domain.entity.User usuario = getUserAutenticado();
-
                 // Validate discount
                 if (request.getTipoDesconto() != null && request.getValorDesconto() != null) {
                         if (request.getTipoDesconto() == com.empresa.comissao.domain.enums.TipoDesconto.PERCENTUAL &&
@@ -330,8 +328,6 @@ public class OrdemServicoService {
                         validarAtribuicaoUsuario(targetUser, empresa);
 
                         os.setUsuario(targetUser);
-                } else if (usuario != null) {
-                        os.setUsuario(usuario);
                 }
 
                 os = osRepository.save(os);
@@ -852,23 +848,6 @@ public class OrdemServicoService {
                         return com.empresa.comissao.domain.entity.Empresa.builder().id(tenantId).build();
                 }
                 throw new EntityNotFoundException("Usuário não vinculado a uma empresa");
-        }
-
-        private com.empresa.comissao.domain.entity.User getUserAutenticado() {
-                org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
-                                .getContext().getAuthentication();
-
-                if (auth != null && auth.getPrincipal() instanceof com.empresa.comissao.security.AuthPrincipal) {
-                        com.empresa.comissao.security.AuthPrincipal principal = (com.empresa.comissao.security.AuthPrincipal) auth
-                                        .getPrincipal();
-                        return com.empresa.comissao.domain.entity.User.builder().id(principal.getUserId())
-                                        .email(principal.getEmail()).build();
-                }
-                // Fallback for legacy tests or other auth methods
-                if (auth != null && auth.getPrincipal() instanceof com.empresa.comissao.domain.entity.User) {
-                        return (com.empresa.comissao.domain.entity.User) auth.getPrincipal();
-                }
-                return null;
         }
 
         private void validarAcesso(OrdemServico os) {

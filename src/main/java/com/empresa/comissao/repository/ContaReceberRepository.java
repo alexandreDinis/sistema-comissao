@@ -22,8 +22,9 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
 
         // Buscar por empresa ordenado por vencimento (Optimized)
         @Query("SELECT DISTINCT c FROM ContaReceber c " +
-                        "JOIN FETCH c.ordemServico os " +
-                        "JOIN FETCH os.cliente " +
+                        "LEFT JOIN FETCH c.cliente " +
+                        "LEFT JOIN FETCH c.ordemServico os " +
+                        "LEFT JOIN FETCH os.cliente " +
                         "LEFT JOIN FETCH os.veiculos v " +
                         "LEFT JOIN FETCH v.pecas " +
                         "LEFT JOIN FETCH c.faturamento " +
@@ -33,8 +34,9 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
 
         // Buscar pendentes por empresa (Optimized)
         @Query("SELECT DISTINCT c FROM ContaReceber c " +
-                        "JOIN FETCH c.ordemServico os " +
-                        "JOIN FETCH os.cliente " +
+                        "LEFT JOIN FETCH c.cliente " +
+                        "LEFT JOIN FETCH c.ordemServico os " +
+                        "LEFT JOIN FETCH os.cliente " +
                         "LEFT JOIN FETCH os.veiculos v " +
                         "LEFT JOIN FETCH v.pecas " +
                         "LEFT JOIN FETCH c.faturamento " +
@@ -103,6 +105,7 @@ public interface ContaReceberRepository extends JpaRepository<ContaReceber, Long
 
         // Buscar recebidos por período (para fluxo de caixa) - COM JOIN FETCH OTIMIZADO
         @Query("SELECT DISTINCT c FROM ContaReceber c " +
+                        "LEFT JOIN FETCH c.cliente " +
                         "LEFT JOIN FETCH c.ordemServico os " +
                         "LEFT JOIN FETCH os.cliente " +
                         "LEFT JOIN FETCH os.veiculos v " +
