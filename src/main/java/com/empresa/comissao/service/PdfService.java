@@ -170,6 +170,19 @@ public class PdfService {
             dados.put("telefone", empresa.getTelefone() != null ? empresa.getTelefone() : "");
             dados.put("email", empresa.getEmail() != null ? empresa.getEmail() : "");
 
+            // Dados de Cobrança / Pagamento
+            dados.put("pixTipo", empresa.getPixTipo() != null ? empresa.getPixTipo() : "");
+            dados.put("pixChave", empresa.getPixChave() != null ? empresa.getPixChave() : "");
+            dados.put("banco", empresa.getBanco() != null ? empresa.getBanco() : "");
+            dados.put("agencia", empresa.getAgencia() != null ? empresa.getAgencia() : "");
+            dados.put("conta", empresa.getConta() != null ? empresa.getConta() : "");
+            dados.put("tipoConta", empresa.getTipoConta() != null ? empresa.getTipoConta() : "");
+
+            // Flag para controlar exibição da seção de pagamento
+            boolean temDadosPagamento = (empresa.getPixChave() != null && !empresa.getPixChave().isBlank())
+                    || (empresa.getBanco() != null && !empresa.getBanco().isBlank());
+            dados.put("temDadosPagamento", temDadosPagamento);
+
             // Load logo
             try {
                 if (empresa.getLogoPath() != null) {
