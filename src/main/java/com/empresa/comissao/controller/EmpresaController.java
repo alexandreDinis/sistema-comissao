@@ -48,7 +48,13 @@ public class EmpresaController {
                 empresa.getEmail(),
                 empresa.getEndereco(),
                 empresa.getModoComissao(),
-                empresa.getLogoPath() != null ? storageService.getFileUrl(empresa.getLogoPath()) : null);
+                empresa.getLogoPath() != null ? storageService.getFileUrl(empresa.getLogoPath()) : null,
+                empresa.getPixTipo(),
+                empresa.getPixChave(),
+                empresa.getBanco(),
+                empresa.getAgencia(),
+                empresa.getConta(),
+                empresa.getTipoConta());
     }
 
     /**
@@ -85,6 +91,24 @@ public class EmpresaController {
         }
         if (request.getCnpj() != null) {
             empresa.setCnpj(request.getCnpj());
+        }
+        if (request.getPixTipo() != null) {
+            empresa.setPixTipo(request.getPixTipo());
+        }
+        if (request.getPixChave() != null) {
+            empresa.setPixChave(request.getPixChave());
+        }
+        if (request.getBanco() != null) {
+            empresa.setBanco(request.getBanco());
+        }
+        if (request.getAgencia() != null) {
+            empresa.setAgencia(request.getAgencia());
+        }
+        if (request.getConta() != null) {
+            empresa.setConta(request.getConta());
+        }
+        if (request.getTipoConta() != null) {
+            empresa.setTipoConta(request.getTipoConta());
         }
 
         Empresa saved = empresaRepository.save(empresa);
@@ -204,6 +228,13 @@ public class EmpresaController {
         private final String endereco;
         private final ModoComissao modoComissao;
         private final String logoUrl;
+        // Dados de Cobrança
+        private final String pixTipo;
+        private final String pixChave;
+        private final String banco;
+        private final String agencia;
+        private final String conta;
+        private final String tipoConta;
     }
 
     @Data
@@ -214,5 +245,12 @@ public class EmpresaController {
         private String endereco;
         private String razaoSocial;
         private String cnpj;
+        // Dados de Cobrança
+        private String pixTipo;
+        private String pixChave;
+        private String banco;
+        private String agencia;
+        private String conta;
+        private String tipoConta;
     }
 }

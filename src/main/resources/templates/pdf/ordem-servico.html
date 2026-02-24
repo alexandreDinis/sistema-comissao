@@ -29,15 +29,13 @@
         }
 
         .logo {
-            width: 120px !important;
-            height: 50px !important;
-            max-width: 120px !important;
-            max-height: 50px !important;
-            object-fit: contain;
+            width: 80px !important;
+            height: 80px !important;
+            max-width: 80px !important;
+            max-height: 80px !important;
         }
 
         .company-info {
-            text-align: right;
             font-size: 8pt;
             color: #666;
         }
@@ -53,7 +51,7 @@
             margin-bottom: 20px;
             background: #f8f9fa;
             padding: 15px;
-            border-radius: 4px;
+            border-bottom: 3px solid #FFD700;
         }
 
         .os-title h1 {
@@ -64,35 +62,6 @@
         .os-number {
             font-size: 20pt;
             color: #333;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 4px;
-            font-size: 10pt;
-            font-weight: bold;
-            margin-top: 8px;
-        }
-
-        .status-ABERTA {
-            background: #ffc107;
-            color: #000;
-        }
-
-        .status-EM_EXECUCAO {
-            background: #17a2b8;
-            color: #fff;
-        }
-
-        .status-FINALIZADA {
-            background: #28a745;
-            color: #fff;
-        }
-
-        .status-CANCELADA {
-            background: #dc3545;
-            color: #fff;
         }
 
         .section-title {
@@ -110,7 +79,6 @@
             border: 1px solid #ddd;
             padding: 12px;
             margin-bottom: 15px;
-            border-radius: 4px;
         }
 
         .info-row {
@@ -124,23 +92,24 @@
             display: inline-block;
         }
 
-        table {
+        table.servicos {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 15px;
         }
 
-        th {
+        table.servicos th {
             background: #333;
             color: #FFD700;
-            padding: 8px;
+            padding: 8px 10px;
             text-align: left;
             font-size: 9pt;
+            border: 1px solid #333;
         }
 
-        td {
-            border-bottom: 1px solid #eee;
-            padding: 8px;
+        table.servicos td {
+            border: 1px solid #ddd;
+            padding: 7px 10px;
             font-size: 9pt;
         }
 
@@ -148,18 +117,25 @@
             text-align: right;
         }
 
-        .text-center {
-            text-align: center;
-        }
-
-        .veiculo-header {
+        .veiculo-header td {
             background: #e9ecef;
             font-weight: bold;
+            font-size: 10pt;
+            border: 1px solid #ccc;
+            padding: 8px 10px;
         }
 
         .subtotal-row td {
             background: #f8f9fa;
             font-weight: bold;
+            border-top: 2px solid #ccc;
+        }
+
+        .obs-text {
+            font-size: 8pt;
+            color: #666;
+            font-style: italic;
+            margin-top: 2px;
         }
 
         .total-box {
@@ -167,7 +143,6 @@
             color: #fff;
             padding: 15px;
             margin-top: 20px;
-            break-inside: avoid;
         }
 
         .total-row {
@@ -204,6 +179,20 @@
             color: #dc3545;
         }
 
+        .payment-section {
+            margin-top: 25px;
+        }
+
+        .payment-box {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 12px;
+        }
+
+        .payment-box .info-row {
+            margin-bottom: 3px;
+        }
+
         .footer {
             font-size: 8pt;
             color: #999;
@@ -216,23 +205,30 @@
 </head>
 
 <body>
-    <!-- Header com Logo e Dados da Empresa -->
+    <!-- Header: Logo + Dados da Empresa -->
     <div class="header">
         <table style="width: 100%; border: none;">
             <tr style="border: none;">
-                <td style="width: 40%; border: none; padding: 0;">
-                    <!-- Logo removido -->
+                <td th:if="${empresa['hasLogo']}"
+                    style="width: 90px; border: none; padding: 0; vertical-align: middle;">
+                    <img class="logo" th:src="${empresa['logoUrl']}" alt="Logo" />
                 </td>
-                <td style="width: 60%; text-align: right; border: none; padding: 0;">
-                    <div class="company-name" th:text="${empresa['razaoSocial']}">Nome da
-                        Empresa</div>
+                <td style="border: none; padding: 0; vertical-align: middle;"
+                    th:style="${empresa['hasLogo']} ? 'padding-left: 15px' : ''">
+                    <div class="company-name" th:text="${empresa['razaoSocial']}">Nome da Empresa</div>
                     <div class="company-info">
-                        <div th:text="${empresa['cnpj']}">CNPJ</div>
-                        <div th:text="${empresa['endereco']}">Endereço</div>
+                        <div th:if="${not #strings.isEmpty(empresa['cnpj'])}" th:text="'CNPJ: ' + ${empresa['cnpj']}">
+                            CNPJ</div>
+                        <div th:if="${not #strings.isEmpty(empresa['endereco'])}" th:text="${empresa['endereco']}">
+                            Endereço</div>
                         <div>
-                            <span th:text="${empresa['telefone']}">Telefone</span>
-                            <span th:if="${empresa['email']}"> | </span>
-                            <span th:text="${empresa['email']}">Email</span>
+                            <span th:if="${not #strings.isEmpty(empresa['telefone'])}"
+                                th:text="${empresa['telefone']}">Telefone</span>
+                            <span
+                                th:if="${not #strings.isEmpty(empresa['telefone']) and not #strings.isEmpty(empresa['email'])}">
+                                | </span>
+                            <span th:if="${not #strings.isEmpty(empresa['email'])}"
+                                th:text="${empresa['email']}">Email</span>
                         </div>
                     </div>
                 </td>
@@ -281,39 +277,42 @@
     <!-- Veículos e Serviços -->
     <div class="section-title">Veículos e Serviços</div>
 
-    <div th:each="veiculo, iterStat : ${os.veiculos}" style="margin-bottom: 20px;">
-        <table>
-            <thead>
-                <tr class="veiculo-header">
-                    <th colspan="3" style="background: #555;">
-                        <span th:text="'Veículo ' + ${iterStat.count} + ': '"></span>
-                        <span th:text="${veiculo.placa}" style="font-size: 12pt;">ABC-1234</span>
-                        <span th:if="${veiculo.modelo}" th:text="' - ' + ${veiculo.modelo}"></span>
-                        <span th:if="${veiculo.cor}" th:text="' (' + ${veiculo.cor} + ')'"></span>
-                    </th>
-                </tr>
-                <tr>
-                    <th style="width: 70%;">Serviço/Peça</th>
-                    <th style="width: 30%;" class="text-right">Valor</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr th:each="peca : ${veiculo.pecas}">
-                    <td>
-                        <span th:text="${peca.tipoPeca?.nome}">Serviço Exemplo</span>
-                        <div th:if="${peca.descricao}"
-                            style="font-size: 8pt; color: #666; font-style: italic; margin-top: 2px;"
-                            th:text="${peca.descricao}"></div>
-                    </td>
-                    <td class="text-right" th:text="${#numbers.formatCurrency(peca.valor)}">R$ 0,00</td>
-                </tr>
-                <tr class="subtotal-row">
-                    <td>Subtotal do Veículo</td>
-                    <td class="text-right" th:text="${#numbers.formatCurrency(veiculo.valorTotal)}">R$ 0,00</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    <table class="servicos">
+        <thead>
+            <tr>
+                <th style="width: 10%;">Veículo</th>
+                <th style="width: 55%;">Serviço / Peça</th>
+                <th style="width: 15%;" class="text-right">Valor</th>
+                <th style="width: 20%;" class="text-right">Subtotal</th>
+            </tr>
+        </thead>
+        <tbody th:each="veiculo, iterStat : ${os.veiculos}">
+            <!-- Linha do Veículo (agrupadora) -->
+            <tr class="veiculo-header">
+                <td th:attr="rowspan=${#lists.size(veiculo.pecas) + 1}">
+                    <div th:text="${veiculo.placa}" style="font-size: 11pt;">ABC-1234</div>
+                    <div style="font-size: 8pt; font-weight: normal; color: #666;">
+                        <span th:if="${not #strings.isEmpty(veiculo.modelo)}" th:text="${veiculo.modelo}"></span>
+                        <span th:if="${not #strings.isEmpty(veiculo.cor)}" th:text="' (' + ${veiculo.cor} + ')'"></span>
+                    </div>
+                </td>
+                <td colspan="2" style="font-size: 9pt; color: #555;">
+                    <span th:text="${#lists.size(veiculo.pecas)}">0</span> serviço(s)
+                </td>
+                <td class="text-right" th:text="${#numbers.formatCurrency(veiculo.valorTotal)}"
+                    style="font-size: 10pt; color: #333;">R$ 0,00</td>
+            </tr>
+            <!-- Linhas de Peças/Serviços -->
+            <tr th:each="peca : ${veiculo.pecas}">
+                <td>
+                    <span th:text="${peca.tipoPeca?.nome}">Serviço</span>
+                    <div th:if="${peca.descricao}" class="obs-text" th:text="${peca.descricao}"></div>
+                </td>
+                <td class="text-right" th:text="${#numbers.formatCurrency(peca.valor)}">R$ 0,00</td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
 
     <!-- Totais -->
     <div class="total-box">
@@ -338,6 +337,40 @@
         <div class="total-row total-final">
             <span class="total-label">VALOR TOTAL</span>
             <span class="total-value" th:text="${#numbers.formatCurrency(os.valorTotalComDesconto)}">R$ 0,00</span>
+        </div>
+    </div>
+
+    <!-- Informações para Pagamento (só exibe se houver dados cadastrados) -->
+    <div th:if="${empresa['temDadosPagamento']}" class="payment-section">
+        <div class="section-title">Informações para Pagamento</div>
+        <div class="payment-box">
+            <!-- PIX -->
+            <th:block th:if="${not #strings.isEmpty(empresa['pixChave'])}">
+                <div class="info-row">
+                    <span class="info-label">PIX:</span>
+                    <span th:text="${empresa['pixChave']}">chave-pix</span>
+                    <span th:if="${not #strings.isEmpty(empresa['pixTipo'])}" style="font-size: 8pt; color: #888;"
+                        th:text="' (' + ${empresa['pixTipo']} + ')'"></span>
+                </div>
+            </th:block>
+            <!-- Dados Bancários -->
+            <th:block th:if="${not #strings.isEmpty(empresa['banco'])}">
+                <div class="info-row">
+                    <span class="info-label">Banco:</span>
+                    <span th:text="${empresa['banco']}">Banco</span>
+                    <span th:if="${not #strings.isEmpty(empresa['agencia'])}"
+                        th:text="' | Ag: ' + ${empresa['agencia']}"></span>
+                    <span th:if="${not #strings.isEmpty(empresa['conta'])}"
+                        th:text="' | Conta: ' + ${empresa['conta']}"></span>
+                    <span th:if="${not #strings.isEmpty(empresa['tipoConta'])}" style="font-size: 8pt; color: #888;"
+                        th:text="' (' + ${empresa['tipoConta']} + ')'"></span>
+                </div>
+            </th:block>
+            <!-- Titular -->
+            <div class="info-row" th:if="${not #strings.isEmpty(empresa['razaoSocial'])}">
+                <span class="info-label">Titular:</span>
+                <span th:text="${empresa['razaoSocial']}">Empresa</span>
+            </div>
         </div>
     </div>
 
