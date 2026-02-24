@@ -63,6 +63,28 @@ public class Empresa {
     @Column(length = 2)
     private String uf; // Estado da empresa
 
+    // ========================================
+    // INFORMAÇÕES DE COBRANÇA / PAGAMENTO
+    // ========================================
+
+    @Column(name = "pix_tipo", length = 20)
+    private String pixTipo; // CPF, CNPJ, EMAIL, TELEFONE, ALEATORIA
+
+    @Column(name = "pix_chave")
+    private String pixChave;
+
+    @Column(length = 100)
+    private String banco;
+
+    @Column(length = 20)
+    private String agencia;
+
+    @Column(length = 30)
+    private String conta;
+
+    @Column(name = "tipo_conta", length = 20)
+    private String tipoConta; // CORRENTE, POUPANCA
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "licenca_id")
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
