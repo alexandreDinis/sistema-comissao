@@ -42,6 +42,7 @@ services:
       AWS_S3_ACCESS_KEY: ${AWS_S3_ACCESS_KEY}
       AWS_S3_SECRET_KEY: ${AWS_S3_SECRET_KEY}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_S3_REGION: ${AWS_S3_REGION:-auto}
       AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
       AWS_S3_PUBLIC_URL: ${AWS_S3_PUBLIC_URL}
 
@@ -56,7 +57,9 @@ services:
       APP_NAME: ${APP_NAME:-Martelo Digital}
 
       # JVM Memory (Oracle Free Tier = 1GB RAM)
-      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -XX:+UseG1GC
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx256m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication
+    mem_limit: 512m
+    memswap_limit: 640m
     ports:
       - "127.0.0.1:8080:8080" # APENAS localhost - Caddy faz reverse proxy
     networks:

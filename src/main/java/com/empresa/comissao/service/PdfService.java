@@ -10,6 +10,8 @@ import com.empresa.comissao.dto.RelatorioReceitaCaixaDTO;
 import com.empresa.comissao.dto.RelatorioFluxoCaixaDTO;
 import com.empresa.comissao.dto.RelatorioContasPagarDTO;
 import com.empresa.comissao.dto.RelatorioDistribuicaoLucrosDTO;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.lowagie.text.DocumentException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +37,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -42,6 +45,12 @@ public class PdfService {
 
     private final TemplateEngine templateEngine;
     private final StorageService storageService;
+
+    // Cache de logos Base64 — evita re-download do S3 a cada PDF
+    private final Cache<String, String> logoCache = Caffeine.newBuilder()
+            .maximumSize(10)
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .build();
 
     @Value("${app.upload.dir:uploads/logos}")
     private String uploadDir;
@@ -206,21 +215,39 @@ public class PdfService {
     }
 
     private String carregarLogoBase64(String logoPath) throws IOException {
+        // Tenta cache primeiro
+        String cached = logoCache.getIfPresent(logoPath);
+        if (cached != null) {
+            log.debug("Logo cache hit: {}", logoPath);
+            return cached;
+        }
+
+        String base64 = null;
+
         // Try S3 storage first if available
         if (storageService != null) {
             byte[] imageBytes = storageService.getFileBytes(logoPath);
             if (imageBytes != null) {
-                return Base64.getEncoder().encodeToString(imageBytes);
+                base64 = Base64.getEncoder().encodeToString(imageBytes);
             }
         }
 
         // Fallback to local filesystem
-        Path path = Paths.get(uploadDir, logoPath);
-        if (Files.exists(path)) {
-            byte[] imageBytes = Files.readAllBytes(path);
-            return Base64.getEncoder().encodeToString(imageBytes);
+        if (base64 == null) {
+            Path path = Paths.get(uploadDir, logoPath);
+            if (Files.exists(path)) {
+                byte[] imageBytes = Files.readAllBytes(path);
+                base64 = Base64.getEncoder().encodeToString(imageBytes);
+            }
         }
-        return null;
+
+        // Cacheia resultado se encontrou
+        if (base64 != null) {
+            logoCache.put(logoPath, base64);
+            log.debug("Logo cached: {} ({} chars)", logoPath, base64.length());
+        }
+
+        return base64;
     }
 
     /**
@@ -284,12 +311,17 @@ public class PdfService {
     }
 
     private byte[] htmlToPdf(String html) throws DocumentException, IOException {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(32768); // pre-size 32KB
 
         ITextRenderer renderer = new ITextRenderer();
-        renderer.setDocumentFromString(java.util.Objects.requireNonNull(html, "HTML content cannot be null"));
-        renderer.layout();
-        renderer.createPDF(outputStream);
+        try {
+            renderer.setDocumentFromString(java.util.Objects.requireNonNull(html, "HTML content cannot be null"));
+            renderer.layout();
+            renderer.createPDF(outputStream);
+        } finally {
+            // Libera referências internas para ajudar o GC
+            renderer.getSharedContext().reset();
+        }
 
         return outputStream.toByteArray();
     }
