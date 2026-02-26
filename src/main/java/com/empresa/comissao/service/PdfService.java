@@ -23,6 +23,8 @@ import org.xhtmlrenderer.pdf.ITextRenderer;
 
 import com.empresa.comissao.domain.enums.CategoriaDespesa;
 
+import jakarta.annotation.PostConstruct;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -37,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -55,10 +58,25 @@ public class PdfService {
     @Value("${app.upload.dir:uploads/logos}")
     private String uploadDir;
 
+    // Controle de concorrência — limita PDFs simultâneos para proteger memória
+    @Value("${app.pdf.max-concurrent:2}")
+    private int maxConcurrentPdfs;
+
+    @Value("${app.pdf.timeout-seconds:30}")
+    private int pdfTimeoutSeconds;
+
+    private Semaphore pdfSemaphore;
+
     @Autowired
     public PdfService(TemplateEngine templateEngine, @Autowired(required = false) StorageService storageService) {
         this.templateEngine = templateEngine;
         this.storageService = storageService;
+    }
+
+    @PostConstruct
+    public void init() {
+        this.pdfSemaphore = new Semaphore(maxConcurrentPdfs, true); // fair = true (FIFO)
+        log.info("📄 PdfService: max concurrent PDFs = {}, timeout = {}s", maxConcurrentPdfs, pdfTimeoutSeconds);
     }
 
     public byte[] gerarRelatorioAnualPdf(RelatorioAnualDTO relatorio, Empresa empresa) {
@@ -311,19 +329,39 @@ public class PdfService {
     }
 
     private byte[] htmlToPdf(String html) throws DocumentException, IOException {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(32768); // pre-size 32KB
-
-        ITextRenderer renderer = new ITextRenderer();
+        boolean acquired = false;
         try {
-            renderer.setDocumentFromString(java.util.Objects.requireNonNull(html, "HTML content cannot be null"));
-            renderer.layout();
-            renderer.createPDF(outputStream);
-        } finally {
-            // Libera referências internas para ajudar o GC
-            renderer.getSharedContext().reset();
-        }
+            acquired = pdfSemaphore.tryAcquire(pdfTimeoutSeconds, TimeUnit.SECONDS);
+            if (!acquired) {
+                log.warn("⚠️ PDF semaphore timeout — {} PDFs em execução, fila cheia", maxConcurrentPdfs);
+                throw new com.empresa.comissao.exception.PdfConcurrencyException(
+                        "Muitos PDFs sendo gerados no momento. Tente novamente em alguns segundos.",
+                        5); // Retry-After: 5 segundos
+            }
 
-        return outputStream.toByteArray();
+            log.debug("📄 PDF acquire — permits restantes: {}", pdfSemaphore.availablePermits());
+
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream(32768); // pre-size 32KB
+            ITextRenderer renderer = new ITextRenderer();
+            try {
+                renderer.setDocumentFromString(java.util.Objects.requireNonNull(html, "HTML content cannot be null"));
+                renderer.layout();
+                renderer.createPDF(outputStream);
+            } finally {
+                // Libera referências internas para ajudar o GC
+                renderer.getSharedContext().reset();
+            }
+
+            return outputStream.toByteArray();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Geração de PDF interrompida", e);
+        } finally {
+            if (acquired) {
+                pdfSemaphore.release();
+                log.debug("📄 PDF release — permits restantes: {}", pdfSemaphore.availablePermits());
+            }
+        }
     }
 
     private String formatarCNPJ(String cnpj) {

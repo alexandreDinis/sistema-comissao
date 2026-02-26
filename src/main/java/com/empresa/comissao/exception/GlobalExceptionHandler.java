@@ -180,6 +180,20 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.METHOD_NOT_ALLOWED);
     }
 
+    @ExceptionHandler(PdfConcurrencyException.class)
+    public ResponseEntity<Object> handlePdfConcurrencyException(PdfConcurrencyException ex) {
+        log.warn("📄 PDF concurrency limit: {}", ex.getMessage());
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", 429);
+        body.put("error", "Too Many Requests");
+        body.put("message", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(body);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleGeneralException(Exception ex,
             jakarta.servlet.http.HttpServletRequest request) {
