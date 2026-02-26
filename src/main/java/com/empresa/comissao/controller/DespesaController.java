@@ -31,14 +31,18 @@ public class DespesaController {
     private final com.empresa.comissao.service.FaturaService faturaService;
     private final com.empresa.comissao.repository.CartaoCreditoRepository cartaoRepository;
     private final com.empresa.comissao.repository.DespesaRepository despesaRepository;
+    private final com.empresa.comissao.repository.UserRepository userRepository;
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     @Operation(summary = "Registrar uma nova despesa", description = "Adiciona um gasto categorizado ao sistema. Se cartão informado, agrupa em fatura.")
     public ResponseEntity<Despesa> criar(
             @Valid @RequestBody DespesaRequestDTO request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
-        // ... (mantém igual) ok, replace content abaixo vai substituir tudo
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal authPrincipal) {
+
+        com.empresa.comissao.domain.entity.User usuario = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(
+                        () -> new com.empresa.comissao.exception.BusinessException("Usuário logado não encontrado"));
 
         // 1. Registrar a Despesa
         Despesa salva = comissaoService.adicionarDespesa(
@@ -79,11 +83,15 @@ public class DespesaController {
     }
 
     @PostMapping("/parcelada")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     @Operation(summary = "Registrar despesa parcelada", description = "Cria múltiplas parcelas de uma compra no cartão de crédito, distribuídas ao longo dos meses")
     public ResponseEntity<List<Despesa>> criarParcelada(
             @Valid @RequestBody DespesaRequestDTO request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal authPrincipal) {
+
+        com.empresa.comissao.domain.entity.User usuario = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(
+                        () -> new com.empresa.comissao.exception.BusinessException("Usuário logado não encontrado"));
 
         // Validações
         if (request.getCartaoId() == null) {
@@ -166,12 +174,15 @@ public class DespesaController {
     @GetMapping
     @Operation(summary = "Listar despesas", description = "Retorna todas as despesas cadastradas")
     public ResponseEntity<List<Despesa>> listar(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.domain.entity.User usuario) {
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.empresa.comissao.security.AuthPrincipal authPrincipal) {
+        com.empresa.comissao.domain.entity.User usuario = authPrincipal != null
+                ? userRepository.findById(authPrincipal.getUserId()).orElse(null)
+                : null;
         return ResponseEntity.ok(comissaoService.listarDespesas(usuario != null ? usuario.getEmpresa() : null));
     }
 
     @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     @Operation(summary = "Excluir despesa", description = "Remove uma despesa e atualiza a fatura do cartão se necessário.")
     public ResponseEntity<Void> excluir(@org.springframework.web.bind.annotation.PathVariable Long id) {
         Despesa despesa = despesaRepository.findById(id)
