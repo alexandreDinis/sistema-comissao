@@ -784,82 +784,23 @@ public class ComissaoService {
                         despesasPorCategoria.put(cat, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 }
 
-                // CAIXA 2.0: Lógica de Rateio Proporcional
-                // Se Total Despesas Mês = 600, mas Faturas Pagas = 500.
-                // Então consideramos 83% de cada despesa.
+                // DRE: Regime de Competência
+                // Despesas são contabilizadas pelo valor integral no mês em que ocorreram,
+                // independente do pagamento da fatura do cartão.
+                // (A lógica de caixa/rateio proporcional fica apenas no Fluxo de Caixa)
 
-                // A. Mapa de Pagamentos (Numerador)
-                Map<String, BigDecimal> pagamentosMap = new java.util.HashMap<>();
-                if (empresaFresh != null) {
-                        contaPagarRepository.findByEmpresaAndTipoAndStatus(
-                                        empresaFresh,
-                                        com.empresa.comissao.domain.enums.TipoContaPagar.FATURA_CARTAO,
-                                        com.empresa.comissao.domain.enums.StatusConta.PAGO).forEach(f -> {
-                                                if (f.getCartao() != null && f.getMesReferencia() != null) {
-                                                        String key = f.getCartao().getId() + "-" + f.getMesReferencia();
-                                                        pagamentosMap.merge(key, f.getValor(), BigDecimal::add);
-                                                }
-                                        });
-                }
-
-                // Buscar despesas raw
+                // Buscar despesas do mês
                 List<Despesa> despesasRaw;
                 if (empresaFresh != null) {
                         despesasRaw = despesaRepository.findByEmpresaAndDataDespesaBetween(empresaFresh, inicioDoMes,
                                         fimDoMes);
-
                 } else {
                         despesasRaw = despesaRepository.findByDataDespesaBetween(inicioDoMes, fimDoMes);
                 }
 
-                // B. Mapa de Total Despesas (Denominador)
-                Map<String, BigDecimal> totalDespesasMap = new java.util.HashMap<>();
+                // Agregar despesas por categoria (valor integral, sem fator de pagamento)
                 for (Despesa d : despesasRaw) {
-                        if (d.getCartao() != null) {
-                                int diaFechamento = d.getCartao().getDiaFechamento() != null
-                                                ? d.getCartao().getDiaFechamento()
-                                                : 25;
-                                YearMonth mesRef = YearMonth.from(d.getDataDespesa());
-                                if (d.getDataDespesa().getDayOfMonth() > diaFechamento) {
-                                        mesRef = mesRef.plusMonths(1);
-                                }
-                                String key = d.getCartao().getId() + "-" + mesRef.toString();
-                                totalDespesasMap.merge(key, d.getValor(), BigDecimal::add);
-                        }
-                }
-
-                // C. Rateio e Agregação
-                for (Despesa d : despesasRaw) {
-                        BigDecimal valorFinal = d.getValor();
-
-                        // Se for cartão, aplica o FATOR DE PAGAMENTO
-                        if (d.getCartao() != null) {
-                                int diaFechamento = d.getCartao().getDiaFechamento() != null
-                                                ? d.getCartao().getDiaFechamento()
-                                                : 25;
-                                YearMonth mesRef = YearMonth.from(d.getDataDespesa());
-                                if (d.getDataDespesa().getDayOfMonth() > diaFechamento) {
-                                        mesRef = mesRef.plusMonths(1);
-                                }
-                                String key = d.getCartao().getId() + "-" + mesRef.toString();
-
-                                BigDecimal totalDespesas = totalDespesasMap.getOrDefault(key, BigDecimal.ZERO);
-                                BigDecimal totalPago = pagamentosMap.getOrDefault(key, BigDecimal.ZERO);
-
-                                if (totalDespesas.compareTo(BigDecimal.ZERO) > 0) {
-                                        // Fator = Pago / Total
-                                        BigDecimal fator = totalPago.divide(totalDespesas, 10, RoundingMode.HALF_UP);
-                                        // Cap in 1.0 (não inflar se pagou a mais/juros)
-                                        if (fator.compareTo(BigDecimal.ONE) > 0)
-                                                fator = BigDecimal.ONE;
-
-                                        valorFinal = d.getValor().multiply(fator);
-                                } else {
-                                        valorFinal = BigDecimal.ZERO;
-                                }
-                        }
-
-                        // DRE REFACTOR: Exclude Non-Operational or Already Calculated items
+                        // Excluir categorias já calculadas separadamente no DRE
                         boolean isExcluded = d.getCategoria() == CategoriaDespesa.IMPOSTOS_SOBRE_VENDA ||
                                         d.getCategoria() == CategoriaDespesa.PROLABORE;
 
@@ -867,7 +808,7 @@ public class ComissaoService {
                                 BigDecimal current = despesasPorCategoria.getOrDefault(d.getCategoria(),
                                                 BigDecimal.ZERO);
                                 despesasPorCategoria.put(d.getCategoria(),
-                                                current.add(valorFinal).setScale(2, RoundingMode.HALF_UP));
+                                                current.add(d.getValor()).setScale(2, RoundingMode.HALF_UP));
                         }
                 }
                 // Sum only valid operational expenses (excluding taxes and prolabore)
