@@ -42,7 +42,7 @@ public class CartaoController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     @Operation(summary = "Criar cartão", description = "Cadastra um novo cartão de crédito corporativo")
     public ResponseEntity<CartaoCredito> criar(
             @Valid @RequestBody CartaoCreditoRequest request) {
@@ -70,7 +70,7 @@ public class CartaoController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     @Operation(summary = "Editar cartão", description = "Edita um cartão de crédito existente")
     public ResponseEntity<CartaoCredito> editar(
             @PathVariable Long id,
@@ -136,7 +136,7 @@ public class CartaoController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA')")
     @Operation(summary = "Desativar cartão", description = "Desativa um cartão de crédito (soft delete)")
     public ResponseEntity<Void> desativar(@PathVariable Long id) {
 
