@@ -83,7 +83,7 @@
 
         table.summary td {
             vertical-align: top;
-            width: 25%;
+            width: 20%;
         }
 
         .card {
@@ -168,13 +168,12 @@
         <p th:text="${relatorio.periodo}">Janeiro 2026</p>
     </div>
 
-    <!-- Summary Cards Table -->
     <table class="summary">
         <tr>
             <!-- Saldo Anterior -->
             <td>
                 <div class="card" style="border-top: 3px solid #666;">
-                    <h3>Saldo Anterior</h3>
+                    <h3>Saldo Anterior (A)</h3>
                     <div class="value" style="color: #666;"
                         th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.saldoInicial, 1, 'POINT', 2, 'COMMA')}">
                     </div>
@@ -183,7 +182,7 @@
             <!-- Entradas -->
             <td>
                 <div class="card" style="border-top: 3px solid #28a745;">
-                    <h3>(+) Entradas</h3>
+                    <h3>(+) Entradas Recebidas</h3>
                     <div class="value" style="color: #28a745;"
                         th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.totalEntradas, 1, 'POINT', 2, 'COMMA')}">
                     </div>
@@ -192,16 +191,24 @@
             <!-- Saídas -->
             <td>
                 <div class="card" style="border-top: 3px solid #dc3545;">
-                    <h3>(-) Saídas</h3>
+                    <h3>(-) Saídas Pagas</h3>
                     <div class="value" style="color: #dc3545;"
                         th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.totalSaidas, 1, 'POINT', 2, 'COMMA')}">
                     </div>
                 </div>
             </td>
+            <!-- Resultado do Mês -->
+            <td>
+                <div class="card" style="border-top: 3px solid #17a2b8;">
+                    <h3>(=) Resultado do Mês</h3>
+                    <div class="value" style="color: #17a2b8;"
+                        th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.resultadoPeriodo, 1, 'POINT', 2, 'COMMA')}"></div>
+                </div>
+            </td>
             <!-- Saldo Final -->
             <td>
-                <div class="card" style="border-top: 3px solid #d4af37;">
-                    <h3>(=) Saldo Final</h3>
+                <div class="card" style="border-top: 3px solid #d4af37; background-color: #fcfaf2;">
+                    <h3>(=) Saldo Final Conta</h3>
                     <div class="value" style="color: #d4af37;"
                         th:text="'R$ ' + ${#numbers.formatDecimal(relatorio.saldoFinal, 1, 'POINT', 2, 'COMMA')}"></div>
                 </div>

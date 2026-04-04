@@ -14,6 +14,7 @@ public class RelatorioFluxoCaixaDTO {
     private BigDecimal saldoInicial;
     private BigDecimal totalEntradas;
     private BigDecimal totalSaidas;
+    private BigDecimal resultadoPeriodo; // O que realmente gerou/perdeu nesse mês (Entradas - Saídas)
     private BigDecimal saldoFinal;
 
     // Optional: Detailed list needed for PDF?

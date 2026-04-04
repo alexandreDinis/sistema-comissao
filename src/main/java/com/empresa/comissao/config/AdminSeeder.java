@@ -44,7 +44,13 @@ public class AdminSeeder {
                     repository.save(user);
                     log.info("✅ Admin user created. Email: {}", email);
                 } else {
-                    log.info("ℹ️ Admin user already exists. Skipping password reset.");
+                    if ("$2a$10$dxW7.k.v7F.V7j7.V7j7.e7J7.V7j7.V7j7.V7j7.V7j7.V7j7".equals(user.getPassword())) {
+                        log.info("ℹ️ Fixing dummy hash for Admin user.");
+                        user.setPassword(passwordEncoder.encode("admin123"));
+                        repository.save(user);
+                    } else {
+                        log.info("ℹ️ Admin user already exists. Skipping password reset.");
+                    }
                 }
 
             } catch (Exception e) {
@@ -69,9 +75,15 @@ public class AdminSeeder {
                     repository.save(superUser);
                     log.info("✅ Super Admin created. Email: {}", superEmail);
                 } else {
-                    log.info("ℹ️ Super Admin already exists. Skipping password reset to preserve custom password.");
-                    // ⚠️ NÃO resetar a senha aqui! Se o usuário já trocou, deve manter a senha
-                    // dele.
+                    if ("$2a$10$placeholderHASH...........................".equals(superUser.getPassword())) {
+                        log.info("ℹ️ Fixing dummy hash for Super Admin.");
+                        superUser.setPassword(passwordEncoder.encode("47548971"));
+                        repository.save(superUser);
+                    } else {
+                        log.info("ℹ️ Super Admin already exists. Skipping password reset to preserve custom password.");
+                        // ⚠️ NÃO resetar a senha aqui! Se o usuário já trocou, deve manter a senha
+                        // dele.
+                    }
                 }
 
             } catch (Exception e) {
