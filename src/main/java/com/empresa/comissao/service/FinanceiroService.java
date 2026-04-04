@@ -933,13 +933,15 @@ public class FinanceiroService {
                                 .map(RelatorioFluxoCaixaDTO.ItemFluxoDTO::getValor)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-                BigDecimal saldoFinal = saldoInicial.add(totalEntradas).subtract(totalSaidas);
+                BigDecimal resultadoPeriodo = totalEntradas.subtract(totalSaidas);
+                BigDecimal saldoFinal = saldoInicial.add(resultadoPeriodo);
 
                 return RelatorioFluxoCaixaDTO.builder()
                                 .periodo(periodo.getMonth().name() + "/" + periodo.getYear())
                                 .saldoInicial(saldoInicial)
                                 .totalEntradas(totalEntradas)
                                 .totalSaidas(totalSaidas)
+                                .resultadoPeriodo(resultadoPeriodo)
                                 .saldoFinal(saldoFinal)
                                 .entradas(entradasDTO)
                                 .saidas(saidasDTO)
@@ -1070,7 +1072,11 @@ public class FinanceiroService {
                 long recebimentosVencendo = contaReceberRepository.countVencendoProximos(
                                 empresa, LocalDate.now(), LocalDate.now().plusDays(7));
 
-                return new ResumoFinanceiro(totalAPagar, totalAReceber, contasVencendo, recebimentosVencendo);
+                BigDecimal totalRecebidoCaixa = recebimentoRepository.sumByEmpresaAndDataPagamentoBefore(empresa, LocalDate.now().plusDays(1));
+                BigDecimal totalPagoCaixa = contaPagarRepository.sumByPagamentoBefore(empresa, LocalDate.now().plusDays(1));
+                BigDecimal saldoAtual = totalRecebidoCaixa.subtract(totalPagoCaixa);
+
+                return new ResumoFinanceiro(totalAPagar, totalAReceber, contasVencendo, recebimentosVencendo, saldoAtual);
         }
 
         /**
@@ -1080,7 +1086,8 @@ public class FinanceiroService {
                         BigDecimal totalAPagar,
                         BigDecimal totalAReceber,
                         long contasVencendoProximos7Dias,
-                        long recebimentosVencendoProximos7Dias) {
+                        long recebimentosVencendoProximos7Dias,
+                        BigDecimal saldoAtual) {
                 public BigDecimal getSaldoProjetado() {
                         return totalAReceber.subtract(totalAPagar);
                 }
