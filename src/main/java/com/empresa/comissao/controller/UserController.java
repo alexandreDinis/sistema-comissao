@@ -19,6 +19,8 @@ public class UserController {
     private final UserRepository repository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final com.empresa.comissao.repository.EmpresaRepository empresaRepository;
+    private final com.empresa.comissao.repository.FaturaTenantRepository faturaTenantRepository;
+    private final com.empresa.comissao.repository.FaturaLicencaRepository faturaLicencaRepository;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'ADMIN_EMPRESA', 'SUPER_ADMIN')")
@@ -53,7 +55,8 @@ public class UserController {
                                 .map(com.empresa.comissao.domain.entity.Feature::getCodigo)
                                 .collect(java.util.stream.Collectors.toSet()) : java.util.Collections.emptySet(),
                         u.getEmpresa() != null ? u.getEmpresa().getId() : null,
-                        u.isParticipaComissao()))
+                        u.isParticipaComissao(),
+                        null))
                 .collect(java.util.stream.Collectors.toList());
 
         return ResponseEntity.ok(response);
@@ -92,9 +95,27 @@ public class UserController {
                 .map(com.empresa.comissao.domain.entity.Feature::getCodigo)
                 .collect(java.util.stream.Collectors.toSet());
 
+        Integer diasRestantes = null;
+        java.time.LocalDate hoje = java.time.LocalDate.now();
+
+        if (user.getRole() == com.empresa.comissao.domain.enums.Role.REVENDEDOR && user.getLicenca() != null) {
+            diasRestantes = faturaLicencaRepository.findFirstByLicencaIdAndStatusOrderByDataVencimentoAsc(
+                    user.getLicenca().getId(), com.empresa.comissao.domain.enums.StatusFatura.PENDENTE)
+                    .map(f -> (int) java.time.temporal.ChronoUnit.DAYS.between(hoje, f.getDataVencimento()))
+                    .filter(d -> d >= 0 && d <= 5)
+                    .orElse(null);
+        } else if (user.getEmpresa() != null) {
+            diasRestantes = faturaTenantRepository.findFirstByEmpresaIdAndStatusOrderByDataVencimentoAsc(
+                    user.getEmpresa().getId(), com.empresa.comissao.domain.enums.StatusFatura.PENDENTE)
+                    .map(f -> (int) java.time.temporal.ChronoUnit.DAYS.between(hoje, f.getDataVencimento()))
+                    .filter(d -> d >= 0 && d <= 5)
+                    .orElse(null);
+        }
+
         return ResponseEntity
                 .ok(new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive(), featureCodes,
-                        user.getEmpresa() != null ? user.getEmpresa().getId() : null, user.isParticipaComissao()));
+                        user.getEmpresa() != null ? user.getEmpresa().getId() : null, user.isParticipaComissao(),
+                        diasRestantes));
     }
 
     /**
@@ -128,7 +149,8 @@ public class UserController {
                         u.isActive(),
                         java.util.Collections.emptySet(), // Não expõe features para funcionários
                         u.getEmpresa() != null ? u.getEmpresa().getId() : null,
-                        u.isParticipaComissao()))
+                        u.isParticipaComissao(),
+                        null))
                 .collect(java.util.stream.Collectors.toList());
 
         return ResponseEntity.ok(response);
@@ -144,6 +166,7 @@ public class UserController {
         private java.util.Set<String> features;
         private Long empresaId;
         private boolean participaComissao;
+        private Integer diasParaVencimento;
     }
 
     @PatchMapping("/{id}/approve")
@@ -224,7 +247,7 @@ public class UserController {
 
         return ResponseEntity
                 .ok(new UserResponse(user.getId(), user.getEmail(), user.getRole(), user.isActive(), featureCodes,
-                        user.getEmpresa() != null ? user.getEmpresa().getId() : null, user.isParticipaComissao()));
+                        user.getEmpresa() != null ? user.getEmpresa().getId() : null, user.isParticipaComissao(), null));
     }
 
     @PatchMapping("/{id}/role")
@@ -284,7 +307,7 @@ public class UserController {
 
         return ResponseEntity
                 .ok(new UserResponse(saved.getId(), saved.getEmail(), saved.getRole(), saved.isActive(), featureCodes,
-                        saved.getEmpresa() != null ? saved.getEmpresa().getId() : null, saved.isParticipaComissao()));
+                        saved.getEmpresa() != null ? saved.getEmpresa().getId() : null, saved.isParticipaComissao(), null));
     }
 
     @DeleteMapping("/{id}")
