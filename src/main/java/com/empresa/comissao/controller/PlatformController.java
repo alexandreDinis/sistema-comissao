@@ -33,9 +33,10 @@ public class PlatformController {
     private final UserRepository userRepository;
     private final FeatureRepository featureRepository;
     private final PasswordEncoder passwordEncoder;
+    private final com.empresa.comissao.security.AuthVersionService authVersionService;
 
     @GetMapping("/tenants")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA', 'SUPER_ADMIN')")
     public ResponseEntity<List<Empresa>> listTenants(
             @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
         User principal = userRepository.findById(authPrincipal.getUserId())
@@ -55,7 +56,7 @@ public class PlatformController {
     }
 
     @PostMapping("/tenants")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA', 'SUPER_ADMIN')")
     @Transactional
     public ResponseEntity<?> createTenant(@RequestBody CreateTenantRequest request,
             @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
@@ -114,7 +115,7 @@ public class PlatformController {
     }
 
     @GetMapping("/stats")
-    @PreAuthorize("hasAuthority('PLATFORM_DASHBOARD_VIEW') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    @PreAuthorize("hasAuthority('PLATFORM_DASHBOARD_VIEW') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA', 'SUPER_ADMIN')")
     public ResponseEntity<PlatformStats> getStats(
             @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
 
@@ -165,7 +166,7 @@ public class PlatformController {
     }
 
     @GetMapping("/plans")
-    @PreAuthorize("hasAuthority('PLATFORM_PLAN_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    @PreAuthorize("hasAuthority('PLATFORM_PLAN_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA', 'SUPER_ADMIN')")
     public ResponseEntity<java.util.List<PlanDTO>> getPlans() {
         return ResponseEntity.ok(java.util.Arrays.stream(Plano.values())
                 .map(p -> new PlanDTO(p.name(), p.name(), java.math.BigDecimal.ZERO)) // Todo: Add prices to Enum
@@ -173,7 +174,7 @@ public class PlatformController {
     }
 
     @PutMapping("/tenants/{id}/toggle-status")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA', 'SUPER_ADMIN')")
     public ResponseEntity<Empresa> toggleTenantStatus(@PathVariable Long id,
             @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
         User principal = userRepository.findById(authPrincipal.getUserId())
@@ -187,11 +188,41 @@ public class PlatformController {
         checkResellerOwnership(principal, empresa);
 
         empresa.setAtivo(!empresa.isAtivo());
-        return ResponseEntity.ok(empresaRepository.save(empresa));
+        if (empresa.isAtivo()) {
+            empresa.setStatus(com.empresa.comissao.domain.enums.StatusEmpresa.ATIVA);
+        } else {
+            empresa.setStatus(com.empresa.comissao.domain.enums.StatusEmpresa.BLOQUEADA);
+        }
+        
+        var savedEmpresa = empresaRepository.save(empresa);
+        authVersionService.incrementTenantVersion(id);
+        return ResponseEntity.ok(savedEmpresa);
+    }
+
+    @PutMapping("/tenants/{id}/dar-baixa")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA', 'SUPER_ADMIN')")
+    public ResponseEntity<Empresa> registrarPagamentoTenant(@PathVariable Long id,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
+        User principal = userRepository.findById(authPrincipal.getUserId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
+
+        var empresa = empresaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Empresa não encontrada"));
+
+        checkResellerOwnership(principal, empresa);
+
+        // Somente garante que esteja ativo. (Futuramente: atualiza dataVencimento)
+        empresa.setAtivo(true);
+        empresa.setStatus(com.empresa.comissao.domain.enums.StatusEmpresa.ATIVA);
+        
+        var savedEmpresa = empresaRepository.save(empresa);
+        authVersionService.incrementTenantVersion(id);
+        return ResponseEntity.ok(savedEmpresa);
     }
 
     @PutMapping("/tenants/{id}")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA', 'SUPER_ADMIN')")
     @Transactional
     public ResponseEntity<Empresa> updateTenant(@PathVariable Long id, @RequestBody UpdateTenantRequest request,
             @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
@@ -298,7 +329,7 @@ public class PlatformController {
     }
 
     @PutMapping("/tenants/{id}/reset-password")
-    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA')")
+    @PreAuthorize("hasAuthority('PLATFORM_COMPANY_MANAGE') or hasAnyRole('REVENDEDOR', 'ADMIN_LICENCA', 'SUPER_ADMIN')")
     @Transactional
     public ResponseEntity<?> resetTenantAdminPassword(@PathVariable Long id, @RequestBody ResetPasswordRequest request,
             @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal authPrincipal) {
@@ -430,6 +461,49 @@ public class PlatformController {
 
         tenant.setLicenca(licenca);
         return ResponseEntity.ok(empresaRepository.save(tenant));
+    }
+
+    @PutMapping("/licencas/{id}/toggle-status")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public ResponseEntity<com.empresa.comissao.domain.entity.Licenca> toggleLicencaStatus(@PathVariable Long id) {
+        var licenca = licencaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Licença não encontrada"));
+
+        if (licenca.getStatus() == com.empresa.comissao.domain.enums.StatusLicenca.ATIVA) {
+            licenca.setStatus(com.empresa.comissao.domain.enums.StatusLicenca.SUSPENSA);
+        } else {
+            licenca.setStatus(com.empresa.comissao.domain.enums.StatusLicenca.ATIVA);
+        }
+        
+        var savedLicenca = licencaRepository.save(licenca);
+        
+        // Invalidate cache for all tenants of this reseller
+        var tenants = empresaRepository.findByLicencaId(id);
+        for (var tenant : tenants) {
+            authVersionService.incrementTenantVersion(tenant.getId());
+        }
+        
+        return ResponseEntity.ok(savedLicenca);
+    }
+
+    @PutMapping("/licencas/{id}/dar-baixa")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Transactional
+    public ResponseEntity<com.empresa.comissao.domain.entity.Licenca> registrarPagamentoLicenca(@PathVariable Long id) {
+        var licenca = licencaRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Licença não encontrada"));
+
+        licenca.setStatus(com.empresa.comissao.domain.enums.StatusLicenca.ATIVA);
+        var savedLicenca = licencaRepository.save(licenca);
+        
+        // Toda vez que pagam, resetar os caches dos tenants pra garantir acesso total
+        var tenants = empresaRepository.findByLicencaId(id);
+        for (var tenant : tenants) {
+            authVersionService.incrementTenantVersion(tenant.getId());
+        }
+        
+        return ResponseEntity.ok(savedLicenca);
     }
 
     @Data

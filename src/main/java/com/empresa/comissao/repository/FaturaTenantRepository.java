@@ -16,6 +16,8 @@ public interface FaturaTenantRepository extends JpaRepository<FaturaTenant, Long
 
     List<FaturaTenant> findByStatusAndDataVencimentoBefore(StatusFatura status, LocalDate data);
 
+    Optional<FaturaTenant> findFirstByEmpresaIdAndStatusOrderByDataVencimentoAsc(Long empresaId, StatusFatura status);
+
     Optional<FaturaTenant> findByPaymentId(String paymentId);
 
     long countByLicencaIdAndStatus(Long licencaId, StatusFatura status); // for Dashboard check

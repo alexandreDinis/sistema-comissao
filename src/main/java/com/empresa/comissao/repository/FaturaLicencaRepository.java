@@ -14,4 +14,6 @@ public interface FaturaLicencaRepository extends JpaRepository<FaturaLicenca, Lo
     boolean existsByLicencaIdAndMesReferencia(Long licencaId, String mesReferencia);
 
     List<FaturaLicenca> findByStatusAndDataVencimentoBefore(StatusFatura status, LocalDate data);
+
+    java.util.Optional<FaturaLicenca> findFirstByLicencaIdAndStatusOrderByDataVencimentoAsc(Long licencaId, StatusFatura status);
 }
