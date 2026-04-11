@@ -92,7 +92,8 @@ public class BillingLicencaService {
     @Transactional
     public void suspenderInadimplentes() {
         LocalDate hoje = LocalDate.now();
-        LocalDate limiteVencimento = hoje.minusDays(3); // Tolerância de 3 dias
+        // A rotina roda dia 10. A fatura vence dia 8. Comparando com hoje, já está atrasada.
+        LocalDate limiteVencimento = hoje; // Sem subtrair dias para que o dia 8 seja 'before' dia 10
 
         List<FaturaLicenca> vencidas = faturaLicencaRepository
                 .findByStatusAndDataVencimentoBefore(StatusFatura.PENDENTE, limiteVencimento);
